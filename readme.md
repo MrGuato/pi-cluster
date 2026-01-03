@@ -1,3 +1,9 @@
+[![Made With Love](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F-by%20Jonathan-red)](https://github.com/MrGuato)
+![GitHub last commit](https://img.shields.io/github/last-commit/MrGuato/pi-cluster?style=flat-square)
+![GitHub repo size](https://img.shields.io/github/repo-size/MrGuato/pi-cluster?style=flat-square)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/MrGuato/pi-cluster?style=flat-square)
+
+
 # pi-cluster  
 **Raspberry Pi k3s Kubernetes Cluster — GitOps with FluxCD**
 
