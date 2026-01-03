@@ -2,7 +2,14 @@
 ![GitHub last commit](https://img.shields.io/github/last-commit/MrGuato/pi-cluster?style=flat-square)
 ![GitHub repo size](https://img.shields.io/github/repo-size/MrGuato/pi-cluster?style=flat-square)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/MrGuato/pi-cluster?style=flat-square)
+<<<<<<< HEAD
 
+=======
+![Kubernetes](https://img.shields.io/badge/Kubernetes-k3s-blue?style=flat-square&logo=kubernetes)
+![GitOps](https://img.shields.io/badge/GitOps-FluxCD-blueviolet?style=flat-square)
+![Architecture](https://img.shields.io/badge/Arch-ARM64-success?style=flat-square)
+![Cluster](https://img.shields.io/badge/Cluster-Raspberry%20Pi-red?style=flat-square)
+>>>>>>> 89a7e46 (feat: add badges to readme)
 
 # pi-cluster  
 **Raspberry Pi k3s Kubernetes Cluster — GitOps with FluxCD**
