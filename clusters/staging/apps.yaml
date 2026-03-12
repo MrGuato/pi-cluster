@@ -13,4 +13,8 @@ spec:
     kind: GitRepository
     name: flux-system
   path: ./apps/staging
-  prune: true 
+  prune: true
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
