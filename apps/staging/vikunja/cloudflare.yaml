@@ -37,7 +37,7 @@ spec:
       volumes:
         - name: creds
           secret:
-            secretName: tunnel-credentials    # The secret we wrote above
+            secretName: tunnel-credentials-v    # The secret we wrote above
         - name: config
           configMap:
             name: cloudflared
