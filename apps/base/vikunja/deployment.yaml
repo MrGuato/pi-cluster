@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vikunja
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vikunja
+  template:
+    metadata:
+      labels:
+        app: vikunja
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres 5432; do
+                echo "Waiting for PostgreSQL..."; sleep 3
+              done
+              echo "PostgreSQL is ready!"
+      containers:
+        - name: vikunja
+          image: vikunja/vikunja:latest
+          ports:
+            - name: http
+              containerPort: 3456
+          envFrom:
+            - configMapRef:
+                name: vikunja-config       # All the VIKUNJA_* env vars from the ConfigMap
+            - secretRef:
+                name: vikunja-secret       # The JWT secret
+          env:
+            # These come from the DB secret individually, not the whole secret
+            - name: VIKUNJA_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vikunja-db-secret
+                  key: POSTGRES_USER
+            - name: VIKUNJA_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vikunja-db-secret
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 400m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /api/v1/info
+              port: 3456
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/info
+              port: 3456
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: files
+              mountPath: /app/vikunja/files   # Where Vikunja stores file attachments
+      volumes:
+        - name: files
+          persistentVolumeClaim:
+            claimName: vikunja-files-pvc
