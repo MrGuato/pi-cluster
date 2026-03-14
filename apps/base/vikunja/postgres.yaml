@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres        # This Deployment manages pods with this label
+  strategy:
+    type: Recreate         # Stop old pod before starting new one (required for ReadWriteOnce PVCs)
+  template:
+    metadata:
+      labels:
+        app: postgres      # The label applied to pods this Deployment creates
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine   # Official image, has linux/arm64 layer for RP4
+          args:
+            - postgres
+            - -c
+            - shared_buffers=128MB   # RP4 tuning: cap memory postgres uses for caching
+            - -c
+            - max_connections=50     # RP4 tuning: fewer connections = less RAM
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata   # Needed to avoid a postgres init quirk
+          envFrom:
+            - secretRef:
+                name: vikunja-db-secret   # Injects POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+          ports:
+            - containerPort: 5432
+          resources:
+            requests:
+              cpu: 50m        # 50 millicores = 5% of one CPU core at minimum
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 384Mi   # Hard cap — protects your other workloads on the RP4
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "vikunja"]
+            initialDelaySeconds: 30   # Give postgres time to start before checking
+            periodSeconds: 15
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "vikunja"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data   # Where postgres writes its files
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-pvc   # Links to the PVC we defined above
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres    # Routes traffic to pods with this label
+  ports:
+    - port: 5432
+      targetPort: 5432
