@@ -1,7 +1,7 @@
-apiVersion: helm.toolkit.fluxcd.io/vi
+apiVersion: kustomize.toolkit.fluxcd.io/vi
 kind: Kustomization
 metadata:
-  name: monitoring-controllers
+  name: monitoring
   namespace: flux-system
 spec:
   interval: 1m0s
