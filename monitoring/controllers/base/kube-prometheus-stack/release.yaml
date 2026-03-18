@@ -29,3 +29,8 @@ spec:
   values:
     grafana:
       adminPassword: mrguato
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        hosts:
+          - grafana.deleontech.net
