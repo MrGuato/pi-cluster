@@ -17,11 +17,6 @@ spec:
       labels:
         app: couchdb
     spec:
-      securityContext:
-        fsGroup: 5984
-        runAsUser: 5984
-        runAsNonRoot: true
-
       containers:
         - name: couchdb
           image: couchdb:3.3.3
