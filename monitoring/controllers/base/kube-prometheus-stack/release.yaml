@@ -34,3 +34,8 @@ spec:
         ingressClassName: traefik
         hosts:
           - grafana.deleontech.net
+
+        tls:
+          - secretName: grafana-tls-secret
+              hosts:
+                - grafana.deleontech.net
