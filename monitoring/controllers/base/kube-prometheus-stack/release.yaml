@@ -37,5 +37,5 @@ spec:
 
         tls:
           - secretName: grafana-tls-secret
-              hosts:
-                - grafana.deleontech.net
+            hosts:
+              - grafana.deleontech.net
