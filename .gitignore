@@ -1,0 +1,4 @@
+*.agekey
+*.key
+*.crt
+dashboard/node_modules/
