@@ -4,4 +4,4 @@ namespace: cluster-dashboard
 resources:
   - ../../base/cluster-dashboard/
   - cloudflare.yaml
-  - seecret.yaml
+  - secret.yaml
