@@ -24,7 +24,7 @@ spec:
             - containerPort: 9090
 
           securityContext: 
-          allowPrivilegeEscalation: false
+            allowPrivilegeEscalation: false
 
           volumeMounts:
             - name: linkding-data
