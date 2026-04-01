@@ -57,8 +57,6 @@ spec:
               cpu: 50m
               memory: 32Mi
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1001
             allowPrivilegeEscalation: false
           volumeMounts:
             - name: metrics-data
