@@ -13,8 +13,8 @@ spec:
         app: cluster-dashboard
     spec:
       containers:
-        - name: cluster-dashboard
-          image: ghcr.io/mrguato/cluster-dashboard:v3.0.0
+        - name: nginx
+          image: ghcr.io/mrguato/cluster-dashboard:v4.0.0
           ports:
             - containerPort: 8080
           resources:
@@ -41,3 +41,36 @@ spec:
             runAsUser: 101
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: metrics-data
+              mountPath: /usr/share/nginx/html/api
+              readOnly: true
+
+        - name: metrics-collector
+          image: alpine:3.20
+          command: ["/bin/sh", "/scripts/collect.sh"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: metrics-data
+              mountPath: /data
+            - name: collector-script
+              mountPath: /scripts
+              readOnly: true
+
+      volumes:
+        - name: metrics-data
+          emptyDir: {}
+        - name: collector-script
+          configMap:
+            name: metrics-collector-script
+            defaultMode: 0555

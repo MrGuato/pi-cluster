@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metrics-collector-script
+data:
+  collect.sh: |
+    #!/bin/sh
+    PROM="http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
+    OUT="/data/metrics.json"
+    mkdir -p /tmp/m
+
+    q() { curl -fsG "$PROM" --data-urlencode "query=$1" 2>/dev/null || echo '{"data":{"result":[]}}'; }
+
+    echo "[collector] Starting metrics loop (30s interval)"
+
+    while true; do
+      q 'node_uname_info' > /tmp/m/nodes.json
+      q '100 * (1 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])))' > /tmp/m/cpu.json
+      q '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100' > /tmp/m/mem.json
+      q 'node_memory_MemTotal_bytes' > /tmp/m/memtotal.json
+      q 'count by(node)(kube_pod_info)' > /tmp/m/pods.json
+      q 'count(kube_pod_info)' > /tmp/m/totalpods.json
+      q 'kube_deployment_status_replicas_available' > /tmp/m/dep_avail.json
+      q 'kube_deployment_spec_replicas' > /tmp/m/dep_desired.json
+      q 'node_boot_time_seconds' > /tmp/m/boot.json
+
+      jq -n \
+        --slurpfile nodes /tmp/m/nodes.json \
+        --slurpfile cpu /tmp/m/cpu.json \
+        --slurpfile mem /tmp/m/mem.json \
+        --slurpfile memtotal /tmp/m/memtotal.json \
+        --slurpfile pods /tmp/m/pods.json \
+        --slurpfile totalpods /tmp/m/totalpods.json \
+        --slurpfile da /tmp/m/dep_avail.json \
+        --slurpfile dd /tmp/m/dep_desired.json \
+        --slurpfile boot /tmp/m/boot.json \
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{
+          timestamp: $ts,
+          nodes: [
+            $nodes[0].data.result[]
+            | .metric as $m
+            | {
+                name: $m.nodename,
+                instance: $m.instance,
+                cpu: ([ $cpu[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber | (. * 10 | round / 10) ] | first // 0),
+                memory: ([ $mem[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber | (. * 10 | round / 10) ] | first // 0),
+                memory_total_gb: ([ $memtotal[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber / 1073741824 | (. * 10 | round / 10) ] | first // 0),
+                uptime_seconds: ([ $boot[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber | (now - .) ] | first // 0),
+                pods: ([ $pods[0].data.result[] | select(.metric.node == $m.nodename) | .value[1] | tonumber ] | first // 0)
+              }
+          ] | sort_by(.name),
+          total_pods: ($totalpods[0].data.result[0].value[1] // "0" | tonumber),
+          services: [
+            $da[0].data.result[]
+            | .metric as $m
+            | {
+                name: $m.deployment,
+                namespace: $m.namespace,
+                available: (.value[1] | tonumber),
+                desired: ([ $dd[0].data.result[] | select(.metric.deployment == $m.deployment and .metric.namespace == $m.namespace) | .value[1] | tonumber ] | first // 1),
+                healthy: ( (.value[1] | tonumber) >= ([ $dd[0].data.result[] | select(.metric.deployment == $m.deployment and .metric.namespace == $m.namespace) | .value[1] | tonumber ] | first // 1) )
+              }
+          ] | sort_by(.namespace)
+        }' > "${OUT}.tmp" 2>/dev/null && mv "${OUT}.tmp" "$OUT"
+
+      echo "[collector] $(date -u +%H:%M:%S) updated"
+      sleep 30
+    done
