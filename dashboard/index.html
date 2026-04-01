@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>pi-cluster | Status Dashboard</title>
+<meta name="description" content="Self-hosted Kubernetes homelab status dashboard running k3s on Raspberry Pi, managed through FluxCD GitOps." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0c14; --card: #12141f; --card-alt: #0d0f18;
+    --border: #1e2235; --border-h: #2a2f48;
+    --text: #e4e6f0; --dim: #5a5f7a; --muted: #3d4260;
+    --green: #00e5a0; --purple: #6c7aed; --yellow: #ffc857;
+    --orange: #f48120; --pink: #e056a0; --red: #ff4d6a; --blue: #38bdf8;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  html { scroll-behavior: smooth; }
+  body { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--sans); overflow-x: hidden; }
+ 
+  .grid-bg {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: linear-gradient(rgba(30,34,53,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(30,34,53,0.07) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+  .top-glow {
+    position: fixed; top: -200px; left: 50%; transform: translateX(-50%);
+    width: 800px; height: 400px; pointer-events: none; z-index: 0;
+    background: radial-gradient(ellipse, rgba(0,229,160,0.024) 0%, transparent 70%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 48px 24px 64px; }
+ 
+  .section-label {
+    font-size: 12px; font-weight: 700; color: var(--dim); font-family: var(--mono);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); margin-left: 4px; }
+ 
+  .glow-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .glow-dot.green { background: var(--green); box-shadow: 0 0 8px rgba(0,229,160,0.53), 0 0 16px rgba(0,229,160,0.27); }
+ 
+  /* Animate in */
+  .fade-up { opacity: 0; transform: translateY(20px); transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+  .fade-up.visible { opacity: 1; transform: translateY(0); }
+ 
+  /* Header */
+  .header { margin-bottom: 48px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 24px; }
+  .header-status { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .header-status span { font-size: 12px; font-weight: 600; color: var(--green); font-family: var(--mono); letter-spacing: 0.05em; }
+  .header h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+  .header p { font-size: 15px; color: var(--dim); margin-top: 8px; max-width: 480px; line-height: 1.5; }
+  .header-right { text-align: right; }
+  .uptime-label { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+  #uptime { font-family: var(--mono); font-size: 13px; color: var(--green); font-weight: 600; }
+  .time-check { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 8px; }
+ 
+  /* Stats */
+  .stats { display: flex; gap: 16px; margin-bottom: 40px; flex-wrap: wrap; }
+  .stat {
+    background: linear-gradient(135deg, var(--card), var(--card-alt));
+    border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px;
+    flex: 1 1 0; min-width: 130px;
+  }
+  .stat-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); font-family: var(--mono); margin-bottom: 8px; }
+  .stat-value { font-size: 26px; font-weight: 700; font-family: var(--mono); line-height: 1.1; }
+  .stat-sub { font-size: 10px; color: var(--muted); margin-top: 4px; font-family: var(--mono); }
+ 
+  /* Flow */
+  .flow { display: flex; align-items: center; overflow-x: auto; padding: 4px 0; -webkit-overflow-scrolling: touch; }
+  .flow-step { text-align: center; padding: 12px 20px; border-radius: 10px; background: var(--card); min-width: 110px; flex-shrink: 0; }
+  .flow-step-label { font-size: 13px; font-weight: 700; font-family: var(--mono); margin-bottom: 2px; }
+  .flow-step-sub { font-size: 10px; color: var(--dim); }
+  .flow-arrow { width: 32px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; flex-shrink: 0; }
+ 
+  /* Nodes */
+  .nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .node {
+    background: linear-gradient(135deg, var(--card), var(--card-alt));
+    border: 1px solid var(--border); border-radius: 14px; padding: 22px;
+    position: relative; overflow: hidden;
+    opacity: 0; transform: translateY(20px); transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .node.visible { opacity: 1; transform: translateY(0); }
+  .node.server { border-color: rgba(0,229,160,0.2); }
+  .node-glow { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--green), transparent); }
+  .node-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .node-name { font-family: var(--mono); font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .node-role { font-size: 11px; font-family: var(--mono); }
+  .node-role.server { color: var(--green); font-weight: 600; }
+  .node-role.agent { color: var(--dim); }
+  .node-ram { padding: 3px 10px; border-radius: 6px; background: rgba(0,229,160,0.07); border: 1px solid rgba(0,229,160,0.19); font-size: 11px; color: var(--green); font-family: var(--mono); font-weight: 600; }
+  .node-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .metric-head { display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .metric-label { font-size: 10px; color: var(--dim); font-family: var(--mono); }
+  .metric-val { font-size: 10px; font-family: var(--mono); font-weight: 600; }
+  .bar { width: 100%; height: 5px; border-radius: 2px; background: #1a1d2e; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+  .node-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 10px; font-size: 10px; color: var(--muted); font-family: var(--mono); }
+ 
+  /* Services */
+  .services { display: flex; flex-direction: column; gap: 10px; }
+  .svc {
+    background: linear-gradient(135deg, var(--card), var(--card-alt));
+    border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+    opacity: 0; transform: translateY(10px); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none; color: inherit;
+  }
+  .svc.visible { opacity: 1; transform: translateY(0); }
+  .svc.clickable { cursor: pointer; }
+  .svc.clickable:hover { background: #151828; border-color: var(--border-h); }
+  .svc-left { display: flex; align-items: center; gap: 12px; min-width: 180px; flex: 1; }
+  .svc-name { font-size: 14px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+  .svc-ns { font-size: 10px; color: var(--muted); font-family: var(--mono); margin-left: 8px; }
+  .svc-desc { font-size: 12px; color: var(--dim); margin-top: 1px; }
+  .svc-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .svc-tag { padding: 2px 8px; border-radius: 4px; background: #1a1d2e; font-size: 10px; color: var(--dim); font-family: var(--mono); }
+  .svc-pods { font-family: var(--mono); font-size: 12px; color: var(--green); font-weight: 600; }
+ 
+  /* Security */
+  .security { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .sec-card {
+    background: linear-gradient(135deg, var(--card), var(--card-alt));
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px;
+    display: flex; align-items: flex-start; gap: 12px;
+    opacity: 0; transform: translateY(16px); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sec-card.visible { opacity: 1; transform: translateY(0); }
+  .sec-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .sec-label { font-size: 13px; font-weight: 700; color: var(--text); font-family: var(--mono); margin-bottom: 3px; }
+  .sec-detail { font-size: 12px; color: var(--dim); line-height: 1.5; }
+ 
+  /* Stack */
+  .stack { display: flex; flex-wrap: wrap; gap: 10px; }
+  .stack-pill {
+    padding: 6px 14px; border-radius: 8px; background: var(--card);
+    border: 1px solid var(--border); font-size: 12px; color: #8b8fb0;
+    font-family: var(--mono); font-weight: 500;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .stack-cat { color: var(--muted); font-size: 10px; }
+ 
+  /* Footer */
+  footer { border-top: 1px solid var(--border); padding-top: 32px; text-align: center; }
+  .social { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .social a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 8px; background: transparent;
+    border: 1px solid var(--border); color: var(--dim);
+    font-size: 12px; font-family: var(--mono); font-weight: 500;
+    text-decoration: none; transition: all 0.2s ease;
+  }
+  .social a:hover { background: #1a1d2e; border-color: var(--border-h); color: var(--text); }
+  .footer-tagline {
+    font-size: 13px; font-family: var(--mono); font-weight: 600;
+    background: linear-gradient(90deg, var(--green), var(--blue), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .footer-motto { font-size: 11px; font-family: var(--mono); font-style: italic; color: var(--dim); margin-top: 6px; }
+ 
+  /* Mobile */
+  @media (max-width: 640px) {
+    .wrap { padding: 24px 16px 48px; }
+    .header { margin-bottom: 32px; flex-direction: column; gap: 16px; }
+    .header h1 { font-size: 28px; }
+    .header p { font-size: 13px; }
+    .header-right { text-align: left; display: flex; gap: 16px; align-items: center; }
+    .stats { gap: 10px; }
+    .stat { flex: 1 1 45%; min-width: 0; padding: 14px 16px; }
+    .stat-value { font-size: 22px; }
+    .flow-step { padding: 10px 14px; min-width: 80px; }
+    .flow-step-label { font-size: 11px; }
+    .flow-step-sub { font-size: 9px; }
+    .flow-arrow { width: 20px; }
+    .nodes { grid-template-columns: 1fr; gap: 12px; }
+    .services { gap: 8px; }
+    .svc { padding: 12px 14px; }
+    .svc-name { font-size: 12px; }
+    .svc-desc { font-size: 11px; }
+    .svc-tag { display: none; }
+    .security { grid-template-columns: 1fr; }
+    .sec-card { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+ 
+<div class="grid-bg"></div>
+<div class="top-glow"></div>
+ 
+<div class="wrap">
+ 
+  <!-- Header -->
+  <header class="header fade-up">
+    <div>
+      <div class="header-status">
+        <span class="glow-dot green" style="width:10px;height:10px"></span>
+        <span>ALL SYSTEMS OPERATIONAL</span>
+      </div>
+      <h1>pi-cluster</h1>
+      <p>Self-hosted Kubernetes homelab running k3s on Raspberry Pi, managed entirely through FluxCD GitOps.</p>
+    </div>
+    <div class="header-right">
+      <div class="uptime-label">UPTIME</div>
+      <div id="uptime">0d 00h 00m 00s</div>
+      <div class="time-check" id="timecheck"></div>
+    </div>
+  </header>
+ 
+  <!-- Stats -->
+  <div class="stats fade-up" style="transition-delay:0.2s">
+    <div class="stat">
+      <div class="stat-label">Nodes</div>
+      <div class="stat-value" style="color:var(--green)">3</div>
+      <div class="stat-sub">Raspberry Pi 4</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Pods</div>
+      <div class="stat-value" style="color:var(--purple)">28</div>
+      <div class="stat-sub">Running</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Avg CPU</div>
+      <div class="stat-value" style="color:var(--yellow)">28%</div>
+      <div class="stat-sub">All nodes</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Avg Mem</div>
+      <div class="stat-value" style="color:var(--orange)">48%</div>
+      <div class="stat-sub">All nodes</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Services</div>
+      <div class="stat-value" style="color:var(--pink)">5</div>
+      <div class="stat-sub">Production</div>
+    </div>
+  </div>
+ 
+  <!-- GitOps Flow -->
+  <section style="margin-bottom:40px">
+    <div class="section-label">GitOps Pipeline</div>
+    <div class="flow" id="flow"></div>
+  </section>
+ 
+  <!-- Nodes -->
+  <section style="margin-bottom:40px">
+    <div class="section-label">Cluster Nodes</div>
+    <div class="nodes" id="nodes"></div>
+  </section>
+ 
+  <!-- Services -->
+  <section style="margin-bottom:40px">
+    <div class="section-label">Deployed Services</div>
+    <div class="services" id="services"></div>
+  </section>
+ 
+  <!-- Security -->
+  <section style="margin-bottom:40px">
+    <div class="section-label">Security Posture</div>
+    <div class="security" id="security"></div>
+  </section>
+ 
+  <!-- Stack -->
+  <section style="margin-bottom:48px" class="fade-up" style="transition-delay:0.35s">
+    <div class="section-label">Infrastructure Stack</div>
+    <div class="stack" id="stack"></div>
+  </section>
+ 
+  <!-- Footer -->
+  <footer>
+    <div class="social">
+      <a href="https://github.com/MrGuato" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.linkedin.com/in/jonathan-deleon-cism" target="_blank" rel="noopener">LinkedIn</a>
+      <a href="https://mrguato.github.io/gitops-notes" target="_blank" rel="noopener">Blog</a>
+      <a href="https://github.com/MrGuato/pi-cluster" target="_blank" rel="noopener">Source</a>
+    </div>
+    <div class="footer-tagline">Built with &#10084;&#65039; by Jonathan</div>
+    <div class="footer-motto">If it is not in Git, it does not exist.</div>
+  </footer>
+ 
+</div>
+ 
+<script>
+// Data
+const NODES = [
+  { name: "kubepi", role: "Server (Control Plane)", ip: "192.168.1.21", ram: "8GB", cpu: 42, memory: 61, pods: 18, server: true },
+  { name: "kubepi-w1", role: "Agent", ip: "192.168.1.203", ram: "4GB", cpu: 28, memory: 45, pods: 6, server: false },
+  { name: "kubepi-w2", role: "Agent", ip: "192.168.1.202", ram: "2GB", cpu: 15, memory: 38, pods: 4, server: false },
+];
+const SERVICES = [
+  { name: "Vikunja", ns: "vikunja", desc: "Task management", pods: "1/1", url: "https://vikunja.deleontech.net", tags: ["React", "PostgreSQL"] },
+  { name: "Linkding", ns: "linkding", desc: "Bookmark manager", pods: "1/1", url: "https://linkding.deleontech.net", tags: ["Python", "SQLite"] },
+  { name: "Obsidian LiveSync", ns: "obsidian-sync", desc: "Knowledge sync via CouchDB", pods: "1/1", url: "https://obsidian.deleontech.net", tags: ["CouchDB", "Sync"] },
+  { name: "Grafana", ns: "monitoring", desc: "Metrics and dashboards", pods: "1/1", url: null, tags: ["Prometheus", "Helm"] },
+  { name: "Renovate Bot", ns: "renovate", desc: "Automated dependency updates", pods: "CronJob", url: null, tags: ["CronJob", "GitOps"] },
+];
+const SECURITY = [
+  { label: "Zero Trust Ingress", detail: "No open ports, Cloudflare Tunnels + Access OTP", color: "var(--blue)" },
+  { label: "Encrypted Secrets", detail: "SOPS + age, Flux-only decryption", color: "var(--purple)" },
+  { label: "GitOps-Only Changes", detail: "Immutable cluster, full audit trail in Git", color: "var(--green)" },
+  { label: "Namespace Isolation", detail: "Per-app namespaces with dedicated tunnels", color: "var(--pink)" },
+  { label: "Automated Patching", detail: "Renovate CronJob, pinned image tags", color: "var(--orange)" },
+  { label: "Pod Hardening", detail: "runAsNonRoot, resource limits, securityContext", color: "var(--yellow)" },
+];
+const STACK = [
+  { name: "k3s", cat: "Runtime" }, { name: "FluxCD", cat: "GitOps" },
+  { name: "SOPS + age", cat: "Secrets" }, { name: "Cloudflare Tunnels", cat: "Ingress" },
+  { name: "Traefik", cat: "Proxy" }, { name: "Prometheus", cat: "Metrics" },
+  { name: "Grafana", cat: "Viz" }, { name: "Renovate", cat: "Deps" },
+];
+const FLOW = [
+  { label: "Git Push", sub: "pi-cluster", color: "var(--text)" },
+  { label: "FluxCD", sub: "Reconcile", color: "var(--green)" },
+  { label: "SOPS", sub: "Decrypt", color: "var(--yellow)" },
+  { label: "k3s", sub: "Apply", color: "var(--purple)" },
+  { label: "Cloudflare", sub: "Tunnel", color: "var(--orange)" },
+];
+ 
+function barColor(v) { return v > 70 ? 'var(--red)' : v > 50 ? 'var(--yellow)' : 'var(--green)'; }
+ 
+// Render flow
+const flowEl = document.getElementById('flow');
+FLOW.forEach((s, i) => {
+  const step = document.createElement('div');
+  step.className = 'flow-step';
+  step.style.borderColor = s.color.replace(')', ',0.2)').replace('var(', 'rgba(');
+  step.style.border = `1px solid color-mix(in srgb, ${s.color} 20%, transparent)`;
+  step.innerHTML = `<div class="flow-step-label" style="color:${s.color}">${s.label}</div><div class="flow-step-sub">${s.sub}</div>`;
+  flowEl.appendChild(step);
+  if (i < FLOW.length - 1) {
+    const arrow = document.createElement('div');
+    arrow.className = 'flow-arrow';
+    arrow.textContent = '\u2192';
+    flowEl.appendChild(arrow);
+  }
+});
+ 
+// Render nodes
+const nodesEl = document.getElementById('nodes');
+NODES.forEach((n, i) => {
+  const cpuC = barColor(n.cpu), memC = barColor(n.memory);
+  const el = document.createElement('div');
+  el.className = `node${n.server ? ' server' : ''}`;
+  el.innerHTML = `
+    ${n.server ? '<div class="node-glow"></div>' : ''}
+    <div class="node-head">
+      <div>
+        <div class="node-name"><span class="glow-dot green"></span>${n.name}</div>
+        <div class="node-role ${n.server ? 'server' : 'agent'}">${n.role}</div>
+      </div>
+      <div class="node-ram">${n.ram}</div>
+    </div>
+    <div class="node-metrics">
+      <div>
+        <div class="metric-head"><span class="metric-label">CPU</span><span class="metric-val" style="color:${cpuC}">${n.cpu}%</span></div>
+        <div class="bar"><div class="bar-fill" style="width:0%;background:linear-gradient(90deg,${cpuC}cc,${cpuC});box-shadow:0 0 8px ${cpuC}44" data-width="${n.cpu}"></div></div>
+      </div>
+      <div>
+        <div class="metric-head"><span class="metric-label">MEM</span><span class="metric-val" style="color:${memC}">${n.memory}%</span></div>
+        <div class="bar"><div class="bar-fill" style="width:0%;background:linear-gradient(90deg,${memC}cc,${memC});box-shadow:0 0 8px ${memC}44" data-width="${n.memory}"></div></div>
+      </div>
+    </div>
+    <div class="node-foot"><span>${n.ip}</span><span>${n.pods}/110 pods</span></div>
+  `;
+  nodesEl.appendChild(el);
+  setTimeout(() => { el.classList.add('visible'); }, 200 + i * 150);
+});
+ 
+// Render services
+const svcsEl = document.getElementById('services');
+SERVICES.forEach((s, i) => {
+  const el = document.createElement(s.url ? 'a' : 'div');
+  el.className = `svc${s.url ? ' clickable' : ''}`;
+  if (s.url) { el.href = s.url; el.target = '_blank'; el.rel = 'noopener'; }
+  el.innerHTML = `
+    <div class="svc-left">
+      <span class="glow-dot green"></span>
+      <div>
+        <div><span class="svc-name">${s.name}</span><span class="svc-ns">${s.ns}</span></div>
+        <div class="svc-desc">${s.desc}</div>
+      </div>
+    </div>
+    <div class="svc-right">
+      ${s.tags.map(t => `<span class="svc-tag">${t}</span>`).join('')}
+      <span class="svc-pods">${s.pods}</span>
+    </div>
+  `;
+  svcsEl.appendChild(el);
+  setTimeout(() => { el.classList.add('visible'); }, 400 + i * 80);
+});
+ 
+// Render security
+const secEl = document.getElementById('security');
+SECURITY.forEach((s, i) => {
+  const el = document.createElement('div');
+  el.className = 'sec-card';
+  el.innerHTML = `
+    <div class="sec-dot" style="background:${s.color};box-shadow:0 0 8px ${s.color}66"></div>
+    <div>
+      <div class="sec-label">${s.label}</div>
+      <div class="sec-detail">${s.detail}</div>
+    </div>
+  `;
+  secEl.appendChild(el);
+  setTimeout(() => { el.classList.add('visible'); }, 500 + i * 100);
+});
+ 
+// Render stack
+const stackEl = document.getElementById('stack');
+STACK.forEach(s => {
+  const el = document.createElement('span');
+  el.className = 'stack-pill';
+  el.innerHTML = `<span class="stack-cat">${s.cat}</span>${s.name}`;
+  stackEl.appendChild(el);
+});
+ 
+// Uptime counter
+const BASE_UPTIME = 14 * 86400 + 7 * 3600 + 23 * 60 + 41;
+const uptimeStart = Date.now() - BASE_UPTIME * 1000;
+function updateUptime() {
+  const sec = Math.floor((Date.now() - uptimeStart) / 1000);
+  const d = Math.floor(sec / 86400);
+  const h = String(Math.floor((sec % 86400) / 3600)).padStart(2, '0');
+  const m = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+  const s = String(sec % 60).padStart(2, '0');
+  document.getElementById('uptime').textContent = `${d}d ${h}h ${m}m ${s}s`;
+}
+setInterval(updateUptime, 1000);
+updateUptime();
+ 
+// Time check
+function updateTime() {
+  document.getElementById('timecheck').textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+setInterval(updateTime, 60000);
+updateTime();
+ 
+// Animate fade-ups on load
+setTimeout(() => {
+  document.querySelectorAll('.fade-up').forEach(el => el.classList.add('visible'));
+}, 100);
+ 
+// Animate bar fills
+setTimeout(() => {
+  document.querySelectorAll('.bar-fill').forEach(el => {
+    el.style.width = el.dataset.width + '%';
+  });
+}, 400);
+</script>
+</body>
+</html>
+ 
