@@ -5,6 +5,7 @@ metadata:
 spec:
   ports:
     - port: 3000
+      targetPort: 80
   selector:
     app: cluster-dashboard
   type: ClusterIP

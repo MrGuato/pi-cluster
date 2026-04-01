@@ -69,6 +69,6 @@ data:
 
     ingress:
       - hostname: status.deleontech.net
-        service: http://cluster-dashboard:3000
+        service: http://cluster-dashboard:80
       - service: http_status:404
 

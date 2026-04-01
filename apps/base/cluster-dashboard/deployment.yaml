@@ -19,9 +19,9 @@ spec:
         fsGroup: 1001
       containers:
         - name: cluster-dashboard
-          image: ghcr.io/mrguato/cluster-dashboard:v1.0.0
+          image: ghcr.io/mrguato/cluster-dashboard:v2.0.0
           ports:
-            - containerPort: 3000
+            - containerPort: 80
           env:
             - name: PROMETHEUS_URL
               value: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
