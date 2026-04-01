@@ -52,10 +52,10 @@ spec:
           resources:
             requests:
               cpu: 10m
-              memory: 16Mi
-            limits:
-              cpu: 50m
               memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 96Mi
           securityContext:
             allowPrivilegeEscalation: false
           volumeMounts:
