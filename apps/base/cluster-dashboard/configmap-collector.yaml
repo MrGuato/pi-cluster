@@ -5,6 +5,7 @@ metadata:
 data:
   collect.sh: |
     #!/bin/sh
+    apk add --no-cache curl jq > /dev/null 2>&1
     PROM="http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
     OUT="/data/metrics.json"
     mkdir -p /tmp/m
