@@ -24,6 +24,7 @@ spec:
 
     configuration:
       snapshotsEnabled: false
+      volumeSnapshotLocation: []
       backupStorageLocation:
         - name: default
           provider: aws
