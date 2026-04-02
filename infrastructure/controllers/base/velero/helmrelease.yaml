@@ -33,8 +33,8 @@ spec:
           config:
             region: minio
             s3ForcePathStyle: "true"
-            s3Url: http://192.168.1.37:9000
-            publicUrl: http://192.168.1.37:9000
+            s3Url: http://192.168.1.37:9010
+            publicUrl: http://192.168.1.37:9010
 
     credentials:
       existingSecret: velero-minio-credentials
