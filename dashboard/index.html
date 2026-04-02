@@ -283,7 +283,18 @@ function renderServices(services) {
   const el = document.getElementById('services');
   el.innerHTML = '';
   // Filter to interesting deployments (skip kube-system internals)
-  const skip = ['kube-prometheus-stack-kube-state-metrics', 'kube-prometheus-stack-operator', 'traefik'];
+  const skip = ['kube-prometheus-stack-kube-state-metrics',
+    'kube-prometheus-stack-operator',
+    'traefik',
+    'notification-controller',
+    'source-controller',
+    'kustomize-controller',
+    'helm-controller',
+    'local-path-provisioner',
+    'metrics-server',
+    'coredns',
+    'cluster-dashboard',
+  ];
   const filtered = services.filter(s => !skip.includes(s.name));
  
   filtered.forEach((s, i) => {

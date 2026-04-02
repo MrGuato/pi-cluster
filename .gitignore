@@ -2,3 +2,9 @@
 *.key
 *.crt
 dashboard/node_modules/
+# Secrets and certs that should never be committed
+*.key
+*.crt
+*.pem
+grafana-tls-secret.yaml
+kps-defaults.yaml
