@@ -1,0 +1,51 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: velero
+  namespace: velero
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: velero
+      version: ">=7.0.0"
+      sourceRef:
+        kind: HelmRepository
+        name: vmware-tanzu
+        namespace: velero
+  values:
+    image:
+      repository: velero/velero
+      tag: v1.13.2
+
+    initContainers:
+      - name: velero-plugin-for-aws
+        image: velero/velero-plugin-for-aws:v1.9.0
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - mountPath: /target
+            name: plugins
+
+    configuration:
+      backupStorageLocation:
+        - name: default
+          provider: aws
+          bucket: pi-cluster-backups
+          default: true
+          config:
+            region: minio
+            s3ForcePathStyle: "true"
+            s3Url: http://192.168.1.37:9000
+            publicUrl: http://192.168.1.37:9000
+
+    credentials:
+      existingSecret: velero-minio-credentials
+      existingSecretKey: cloud
+
+    nodeSelector:
+      kubernetes.io/arch: arm64
+
+    deployNodeAgent: true
+    nodeAgent:
+      tolerations:
+        - operator: Exists
