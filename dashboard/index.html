@@ -199,12 +199,11 @@ const FLOW = [
  
 // Known service metadata (enriches Prometheus data)
 const SVC_META = {
-  "vikunja": { desc: "Task management", url: "https://vikunja.deleontech.net", tags: ["React", "PostgreSQL"] },
-  "linkding": { desc: "Bookmark manager", url: "https://linkding.deleontech.net", tags: ["Python", "SQLite"] },
-  "couchdb": { desc: "Knowledge sync (Obsidian LiveSync)", url: "https://obsidian.deleontech.net", tags: ["CouchDB", "Sync"], displayName: "Obsidian LiveSync" },
-  "kube-prometheus-stack-grafana": { desc: "Metrics and dashboards", url: null, tags: ["Prometheus", "Helm"], displayName: "Grafana" },
-  "cloudflared": { desc: "Cloudflare Tunnel agent", url: null, tags: ["Tunnel"] },
-  "cluster-dashboard": { desc: "This dashboard", url: null, tags: ["nginx", "Static"] },
+  "vikunja": { desc: "Task management", tags: ["React", "PostgreSQL"] },
+  "linkding": { desc: "Bookmark manager", tags: ["Python", "SQLite"] },
+  "couchdb": { desc: "Knowledge sync (Obsidian LiveSync)", tags: ["CouchDB", "Sync"], displayName: "Obsidian LiveSync" },
+  "kube-prometheus-stack-grafana": { desc: "Metrics and dashboards", tags: ["Prometheus", "Helm"], displayName: "Grafana" },
+  "cloudflared": { desc: "Cloudflare Tunnel agent", tags: ["Tunnel"] },
 };
  
 // Node role mapping
