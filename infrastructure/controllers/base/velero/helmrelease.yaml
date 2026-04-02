@@ -23,6 +23,7 @@ spec:
             name: plugins
 
     configuration:
+      snapshotsEnabled: false
       backupStorageLocation:
         - name: default
           provider: aws
