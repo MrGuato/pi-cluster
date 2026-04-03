@@ -27,7 +27,8 @@ spec:
             - monitoring
             - linkding
             - obsidian-sync
-            - vikunja    initContainers:
+            - vikunja    
+    initContainers:
       - name: velero-plugin-for-aws
         image: velero/velero-plugin-for-aws:v1.10.0
         imagePullPolicy: IfNotPresent
