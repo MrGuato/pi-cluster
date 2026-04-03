@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: nginx
-          image: ghcr.io/mrguato/cluster-dashboard:v4.3.0
+          image: ghcr.io/mrguato/cluster-dashboard:v4.4.0
           ports:
             - containerPort: 8080
           resources:
