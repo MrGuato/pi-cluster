@@ -204,6 +204,7 @@ const SVC_META = {
   "couchdb": { desc: "Knowledge sync (Obsidian LiveSync)", tags: ["CouchDB", "Sync"], displayName: "Obsidian LiveSync" },
   "kube-prometheus-stack-grafana": { desc: "Metrics and dashboards", tags: ["Prometheus", "Helm"], displayName: "Grafana" },
   "cloudflared": { desc: "Cloudflare Tunnel agent", tags: ["Tunnel"] },
+  "longhorn-ui": { desc: "Distributed storage dashboard", tags: ["Storage", "CNCF"], displayName: "Longhorn" },
 };
  
 // Node role mapping
@@ -294,6 +295,11 @@ function renderServices(services) {
     'metrics-server',
     'coredns',
     'cluster-dashboard',
+    'longhorn-driver-deployer',
+    'csi-attacher',
+    'csi-provisioner',
+    'csi-resizer',
+    'csi-snapshotter',
   ];
   const filtered = services.filter(s => !skip.includes(s.name));
  
