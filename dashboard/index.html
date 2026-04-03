@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>pi-cluster | Status Dashboard</title>
-<meta name="description" content="Live Kubernetes homelab status dashboard - k3s on Raspberry Pi, managed through FluxCD GitOps." />
+<meta name="description" content="Live Kubernetes homelab status dashboard - k3s on mixed architecture, managed through FluxCD GitOps." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -116,7 +116,7 @@ footer{border-top:1px solid var(--border);padding-top:32px;text-align:center}
         <span id="statusText" style="font-size:12px;font-weight:600;color:var(--green);font-family:var(--mono);letter-spacing:.05em">ALL SYSTEMS OPERATIONAL</span>
       </div>
       <h1>pi-cluster</h1>
-      <p>Self-hosted Kubernetes homelab running k3s on Raspberry Pi, managed entirely through FluxCD GitOps.</p>
+      <p>Self-hosted Kubernetes homelab running k3s on mixed architecture (ARM64 + x86_64), managed entirely through FluxCD GitOps.</p>
       <div class="api-status live" id="apiStatus">
         <span class="glow-dot green" style="width:6px;height:6px"></span>
         <span>LIVE</span>
@@ -130,7 +130,7 @@ footer{border-top:1px solid var(--border);padding-top:32px;text-align:center}
   </header>
  
   <div class="stats fade-up" style="transition-delay:.2s">
-    <div class="stat"><div class="stat-label">Nodes</div><div class="stat-value" id="statNodes" style="color:var(--green)">-</div><div class="stat-sub">Raspberry Pi 4</div></div>
+    <div class="stat"><div class="stat-label">Nodes</div><div class="stat-value" id="statNodes" style="color:var(--green)">-</div><div class="stat-sub">Mixed Arch</div></div>
     <div class="stat"><div class="stat-label">Pods</div><div class="stat-value" id="statPods" style="color:var(--purple)">-</div><div class="stat-sub">Running</div></div>
     <div class="stat"><div class="stat-label">Avg CPU</div><div class="stat-value" id="statCpu" style="color:var(--yellow)">-</div><div class="stat-sub">All nodes</div></div>
     <div class="stat"><div class="stat-label">Avg Mem</div><div class="stat-value" id="statMem" style="color:var(--orange)">-</div><div class="stat-sub">All nodes</div></div>
@@ -187,7 +187,7 @@ const SECURITY = [
 const STACK = [
   { n: "k3s", c: "Runtime" }, { n: "FluxCD", c: "GitOps" }, { n: "SOPS + age", c: "Secrets" },
   { n: "Cloudflare Tunnels", c: "Ingress" }, { n: "Traefik", c: "Proxy" },
-  { n: "Prometheus", c: "Metrics" }, { n: "Grafana", c: "Viz" }, { n: "Renovate", c: "Deps" },
+  { n: "Prometheus", c: "Metrics" }, { n: "Grafana", c: "Viz" }, { n: "Longhorn", c: "Storage" }, { n: "Renovate", c: "Deps" },
 ];
 const FLOW = [
   { label: "Git Push", sub: "pi-cluster", color: "var(--text)" },
@@ -207,8 +207,9 @@ const SVC_META = {
 };
  
 // Node role mapping
-const NODE_ROLES = { "kubepi": "Server (Control Plane)", "kubepi-w1": "Agent", "kubepi-w2": "Agent" };
-const NODE_RAM = { "kubepi": "8GB", "kubepi-w1": "4GB", "kubepi-w2": "2GB" };
+const NODE_ROLES = { "kubepi": "Server (Control Plane)", "kubethink": "Agent (Storage)", "kubepi-w1": "Agent", "kubepi-w2": "Agent" };
+const NODE_RAM = { "kubepi": "8GB", "kubethink": "8GB", "kubepi-w1": "4GB", "kubepi-w2": "2GB" };
+const NODE_ARCH = { "kubepi": "arm64 · Debian", "kubepi-w1": "arm64 · Debian", "kubepi-w2": "arm64 · Debian", "kubethink": "amd64 · RHEL" };
  
 // ── Render static sections ──
 function renderFlow() {
@@ -273,7 +274,7 @@ function renderNodes(nodes) {
           <div class="bar"><div class="bar-fill" style="width:${n.memory}%;background:linear-gradient(90deg,${memC}cc,${memC});box-shadow:0 0 8px ${memC}44"></div></div>
         </div>
       </div>
-      <div class="node-foot"><span>${n.instance ? n.instance.split(':')[0] : ''}</span><span>${n.pods}/110 pods</span></div>`;
+      <div class="node-foot"><span>${NODE_ARCH[n.name] || ''}</span><span>${n.pods}/110 pods</span></div>`;
     el.appendChild(d);
   });
 }
