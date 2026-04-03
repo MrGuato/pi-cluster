@@ -14,7 +14,20 @@ spec:
         name: vmware-tanzu
         namespace: velero
   values:
-    initContainers:
+    schedules:
+      daily-cluster-backup:
+        disabled: false
+        schedule: "0 2 * * *"    # 2am every day
+        useOwnerReferencesInBackup: false
+        template:
+          ttl: "168h"            # keep backups for 7 days
+          includedNamespaces:
+            - flux-system
+            - velero
+            - monitoring
+            - linkding
+            - obsidian-sync
+            - vikunja    initContainers:
       - name: velero-plugin-for-aws
         image: velero/velero-plugin-for-aws:v1.10.0
         imagePullPolicy: IfNotPresent
