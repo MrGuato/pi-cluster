@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docmost
+  namespace: docmost
+  labels:
+    app: docmost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docmost
+  template:
+    metadata:
+      labels:
+        app: docmost
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: kubethink
+      containers:
+        - name: docmost
+          image: docmost/docmost:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: APP_URL
+              value: "https://docs.deleontech.net"
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: docmost-secrets
+                  key: APP_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: docmost-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+          volumeMounts:
+            - name: docmost-uploads
+              mountPath: /app/data/storage
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: docmost-uploads
+          persistentVolumeClaim:
+            claimName: docmost-uploads

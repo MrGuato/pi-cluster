@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: docmost
+data:
+  config.yaml: |
+    tunnel: 81f8f4de-825b-4fb2-9c0d-a6b66aa43e16
+    credentials-file: /etc/cloudflared/credentials.json
+    no-autoupdate: true
+    ingress:
+      - hostname: docs.deleontech.net
+        service: http://docmost:3000
+      - service: http_status:404
