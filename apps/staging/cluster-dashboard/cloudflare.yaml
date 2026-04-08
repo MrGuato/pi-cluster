@@ -12,6 +12,11 @@ spec:
       labels:
         app: cloudflared
     spec:
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          - 1.1.1.1
+          - 8.8.8.8
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -60,15 +65,11 @@ metadata:
   name: cloudflared
 data:
   config.yaml: |
-    # TODO: Replace <TUNNEL_ID> with your actual tunnel ID
-    # Create with: cloudflared tunnel create dashboard
     tunnel: a1d4d65e-016f-400b-a92e-73ac67c6e3ca
     credentials-file: /etc/cloudflared/creds/credentials.json
     metrics: 0.0.0.0:2000
     no-autoupdate: true
-
     ingress:
       - hostname: status.deleontech.net
-        service: http://cluster-dashboard:80
+        service: http://cluster-dashboard:3000
       - service: http_status:404
-
