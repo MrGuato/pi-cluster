@@ -17,6 +17,10 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/hostname: kubethink
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: docmost
           image: docmost/docmost:latest
