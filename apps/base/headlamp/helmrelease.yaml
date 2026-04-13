@@ -1,0 +1,125 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  interval: 30m
+  timeout: 10m
+  chart:
+    spec:
+      chart: headlamp
+      version: 0.41.0          # immutable; Renovate will PR bumps
+      sourceRef:
+        kind: HelmRepository
+        name: headlamp
+        namespace: headlamp
+      interval: 1h
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+    cleanupOnFail: true
+  driftDetection:
+    mode: enabled
+  values:
+    # ---- Image ---------------------------------------------------------------
+    image:
+      registry: ghcr.io
+      repository: headlamp-k8s/headlamp
+      tag: v0.38.0             # pinned; do not use 'latest'
+      pullPolicy: IfNotPresent
+
+    replicaCount: 1
+
+    # ---- Headlamp config -----------------------------------------------------
+    config:
+      inCluster: true
+      pluginsDir: /build/plugins
+
+    # ---- Pod ServiceAccount (read-only, used by the pod itself) --------------
+    serviceAccount:
+      create: true
+      name: headlamp
+    clusterRoleBinding:
+      create: true
+      clusterRoleName: view
+
+    # ---- Scheduling ----------------------------------------------------------
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values: [amd64, arm64]
+
+    # ---- Resources -----------------------------------------------------------
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # ---- Pod security --------------------------------------------------------
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 100
+      runAsGroup: 101
+      fsGroup: 101
+      seccompProfile:
+        type: RuntimeDefault
+
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 100
+      runAsGroup: 101
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+
+    persistentVolumeClaim:
+      enabled: false
+    volumes:
+      - name: tmp
+        emptyDir: {}
+    volumeMounts:
+      - name: tmp
+        mountPath: /tmp
+
+    # ---- Probes --------------------------------------------------------------
+    livenessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 30
+      periodSeconds: 30
+    readinessProbe:
+      httpGet:
+        path: /
+        port: http
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+    # ---- Service -------------------------------------------------------------
+    service:
+      type: ClusterIP
+      port: 80
+
+    # ---- Ingress -------------------------------------------------------------
+    ingress:
+      enabled: false
+
+    # ---- Misc hygiene --------------------------------------------------------
+    podAnnotations:
+      app.kubernetes.io/managed-by: flux
+    commonLabels:
+      app.kubernetes.io/part-of: platform
