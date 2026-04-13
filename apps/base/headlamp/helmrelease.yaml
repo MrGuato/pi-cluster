@@ -75,16 +75,16 @@ spec:
       capabilities:
         drop: [ALL]
 
-    extraVolumes:
+    volumes:
       - name: home
         emptyDir: {}
       - name: tmp
         emptyDir: {}
-    extraVolumeMounts:
+    volumeMounts:
       - name: home
         mountPath: /home/headlamp
       - name: tmp
-        mountPath: /tmp
+        mountPath: /tmp  
 
     livenessProbe:
       httpGet:
