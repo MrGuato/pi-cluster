@@ -1,0 +1,18 @@
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp
+  namespace: headlamp
+  labels:
+    app.kubernetes.io/name: headlamp
+    app.kubernetes.io/part-of: platform
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`headlamp.deleontech.net`)
+      kind: Rule
+      services:
+        - name: headlamp
+          port: 80
