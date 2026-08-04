@@ -1,3 +1,18 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "flux": {
+    "managerFilePatterns": ["/^(apps|clusters|infrastructure)/.+\\.ya?ml$/"]
+  },
+  "kubernetes": {
+    "managerFilePatterns": ["/^(apps|clusters|infrastructure)/.+\\.ya?ml$/"]
+  },
+  "helm-values": {
+    "managerFilePatterns": ["/^(apps|clusters|infrastructure)/.+\\.ya?ml$/"]
+  },
+  "github-actions": {
+    "enabled": false
+  },
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2
 }
