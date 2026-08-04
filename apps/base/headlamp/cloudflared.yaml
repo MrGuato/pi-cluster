@@ -54,7 +54,7 @@ spec:
                     values: [amd64, arm64]
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:2025.8.1
+          image: cloudflare/cloudflared:2025.11.1
           imagePullPolicy: IfNotPresent
           args:
             - tunnel
