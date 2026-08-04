@@ -10,7 +10,7 @@ spec:
   chart:
     spec:
       chart: headlamp
-      version: 0.41.0          # immutable; Renovate will PR bumps
+      version: 0.44.0          # immutable; Renovate will PR bumps
       sourceRef:
         kind: HelmRepository
         name: headlamp
