@@ -49,7 +49,7 @@ spec:
               readOnly: true
 
         - name: metrics-collector
-          image: alpine:3.20
+          image: alpine:3.24
           command: ["/bin/sh", "/scripts/collect.sh"]
           resources:
             requests:
