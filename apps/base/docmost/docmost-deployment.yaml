@@ -23,7 +23,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: docmost
-          image: docmost/docmost:latest
+          image: docmost/docmost:0.71.1
           ports:
             - containerPort: 3000
           env:
