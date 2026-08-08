@@ -39,7 +39,7 @@ spec:
 
       containers:
         - name: falco
-          image: docker.io/falcosecurity/falco-no-driver:0.40.0
+          image: docker.io/falcosecurity/falco-no-driver:0.39.2
           imagePullPolicy: IfNotPresent
 
           # ── Entrypoint ──────────────────────────────────────────
