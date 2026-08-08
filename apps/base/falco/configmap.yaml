@@ -14,6 +14,14 @@ data:
       modern_ebpf:
         buf_size_preset: 4
 
+    container_engines:
+      docker:
+        enabled: false
+      cri:
+        enabled: true
+        sockets:
+          - /run/containerd/containerd.sock
+
     # ── Rules ───────────────────────────────────────────────────────
     rules_files:
       - /etc/falco/falco_rules.yaml

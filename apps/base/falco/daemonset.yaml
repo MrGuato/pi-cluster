@@ -49,8 +49,6 @@ spec:
             - /etc/falco/config/falco.yaml
             - -r
             - /etc/falco/config/falco_rules.local.yaml
-            - --cri
-            - /run/containerd/containerd.sock
           securityContext:
             privileged: true
 
@@ -81,7 +79,6 @@ spec:
               readOnly: true
 
             - name: containerd-sock
-              mountPath: /run/containerd/containerd.sock
               readOnly: true
 
       # ── Volumes ─────────────────────────────────────────────────
