@@ -1,0 +1,26 @@
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: falco
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./apps/staging/falco
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  # ── SOPS decryption ───────────────────────────────────────────.
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+  # ── Health checks ─────────────────────────────────────────────
+  # Wait for the DaemonSet to be healthy before marking this
+  # Kustomization as Ready. Flux will retry on failure.
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: falco
+      namespace: falco
+  timeout: 5m

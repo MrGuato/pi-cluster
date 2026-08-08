@@ -1,0 +1,107 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falco
+  namespace: falco
+  labels:
+    app.kubernetes.io/name: falco
+    app.kubernetes.io/part-of: security
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: falco
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: falco
+        app.kubernetes.io/part-of: security
+      annotations:
+        configmap-hash: "placeholder"
+    spec:
+      serviceAccountName: falco
+
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+
+      # ── Host namespaces ─────────────────────────────────────────
+      hostPID: true
+      hostNetwork: true
+
+      containers:
+        - name: falco
+          image: docker.io/falcosecurity/falco-no-driver:0.40.0
+          imagePullPolicy: IfNotPresent
+
+          # ── Entrypoint ──────────────────────────────────────────
+          args:
+            - /usr/bin/falco
+            - --cri
+            - /run/containerd/containerd.sock
+            - --config
+            - /etc/falco/config/falco.yaml
+            - --rules-file
+            - /etc/falco/config/falco_rules.local.yaml
+
+          securityContext:
+            privileged: true
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # ── Volume mounts ───────────────────────────────────────
+          volumeMounts:
+            - name: falco-config
+              mountPath: /etc/falco/config
+              readOnly: true
+
+            - name: falco-config
+              mountPath: /etc/falco/rules.d
+              readOnly: true
+
+            - name: dev
+              mountPath: /dev
+              readOnly: true
+
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+
+            - name: containerd-sock
+              mountPath: /run/containerd/containerd.sock
+              readOnly: true
+
+      # ── Volumes ─────────────────────────────────────────────────
+      volumes:
+        - name: falco-config
+          configMap:
+            name: falco-config
+
+        - name: dev
+          hostPath:
+            path: /dev
+            type: Directory
+
+        - name: proc
+          hostPath:
+            path: /proc
+            type: Directory
+
+        - name: containerd-sock
+          hostPath:
+            path: /run/k3s/containerd/containerd.sock
+            type: Socket
