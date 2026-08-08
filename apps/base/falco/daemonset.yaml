@@ -39,19 +39,18 @@ spec:
 
       containers:
         - name: falco
-          image: docker.io/falcosecurity/falco-no-driver:0.39.2
+          image: docker.io/falcosecurity/falco:0.44.1
           imagePullPolicy: IfNotPresent
 
           # ── Entrypoint ──────────────────────────────────────────
           args:
             - /usr/bin/falco
+            - -c
+            - /etc/falco/config/falco.yaml
+            - -r
+            - /etc/falco/config/falco_rules.local.yaml
             - --cri
             - /run/containerd/containerd.sock
-            - --config
-            - /etc/falco/config/falco.yaml
-            - --rules-file
-            - /etc/falco/config/falco_rules.local.yaml
-
           securityContext:
             privileged: true
 
