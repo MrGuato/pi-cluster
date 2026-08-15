@@ -1,0 +1,9 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: forgejo
+  namespace: forgejo
+spec:
+  type: oci
+  url: oci://code.forgejo.org/forgejo-helm
+  interval: 1h
