@@ -77,8 +77,9 @@ spec:
             - name: proc
               mountPath: /host/proc
               readOnly: true
-
+            
             - name: containerd-sock
+              mountPath: /run/containerd/containerd.sock
               readOnly: true
 
       # ── Volumes ─────────────────────────────────────────────────
