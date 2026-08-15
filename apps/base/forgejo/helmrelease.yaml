@@ -50,7 +50,7 @@ spec:
       size: 50Gi
       accessModes:
         - ReadWriteOnce
-      storageClass: longhorn
+      storageClass: longhorn-single
 
     service:
       http:
