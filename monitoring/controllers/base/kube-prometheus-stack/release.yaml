@@ -26,9 +26,13 @@ spec:
       - paths: ["/metadata/annotations/prometheus-operator-validated"]
         target:
           kind: PrometheusRule
+
   values:
     grafana:
-      adminPassword: mrguato
+      admin:
+        existingSecret: grafana-admin
+        userKey: admin-user
+        passwordKey: admin-password
       ingress:
         enabled: true
         ingressClassName: traefik
@@ -39,3 +43,4 @@ spec:
           - secretName: grafana-tls-secret
             hosts:
               - grafana.deleontech.net
+
