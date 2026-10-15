@@ -38,6 +38,9 @@ spec:
     metrics:
       serviceMonitor:
         enabled: true
+        # Prometheus (kube-prometheus-stack) only selects ServiceMonitors carrying this label.
+        additionalLabels:
+          release: kube-prometheus-stack
 
     # Longhorn UI — we'll expose this through Cloudflare later
     longhornUI:
