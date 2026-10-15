@@ -21,13 +21,18 @@ spec:
         useOwnerReferencesInBackup: false
         template:
           ttl: "168h"            # keep backups for 7 days
+          # Back up the data inside every pod volume (kopia, client-side encrypted) in the
+          # included namespaces, not just the manifests. This is what makes PV data recoverable.
+          defaultVolumesToFsBackup: true
           includedNamespaces:
             - flux-system
             - velero
-            - monitoring
             - linkding
             - obsidian-sync
-            - vikunja    
+            - vikunja
+            - forgejo
+            - docmost
+            # monitoring removed: it has no PVCs and FSB would copy Prometheus/Grafana emptyDirs nightly
     initContainers:
       - name: velero-plugin-for-aws
         image: velero/velero-plugin-for-aws:v1.14.4
