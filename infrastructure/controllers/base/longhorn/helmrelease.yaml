@@ -5,10 +5,12 @@ metadata:
   namespace: longhorn-system
 spec:
   interval: 30m
+  # Longhorn upgrades pull ~10 images on 4 nodes; the default 5m Helm timeout is too short.
+  timeout: 30m
   chart:
     spec:
       chart: longhorn
-      version: "1.11.3"
+      version: "1.12.1"
       sourceRef:
         kind: HelmRepository
         name: longhorn
