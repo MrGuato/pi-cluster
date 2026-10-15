@@ -1,0 +1,50 @@
+---
+# Every key is optional; anything omitted falls back to the defaults in
+# internal/config/config.go. Unknown keys are rejected, so a typo fails loudly
+# in the pod log instead of silently disabling a detector.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pisentry-config
+  namespace: pisentry
+  labels:
+    app.kubernetes.io/name: pisentry
+data:
+  config.json: |
+    {
+      "host_root": "/host",
+      "proc_root": "/proc",
+      "state_dir": "/var/lib/pisentry",
+      "listen": ":9817",
+      "learning_period": "15m",
+      "cooldown": "15m",
+      "logs": {
+        "source": "auto",
+        "journal_chroot": true
+      },
+      "ssh": {
+        "fail_threshold": 5,
+        "fail_window": "5m",
+        "allow_cidrs": []
+      },
+      "portscan": {
+        "threshold": 12,
+        "window": "60s"
+      },
+      "listeners": {
+        "ignore_loopback": true,
+        "allow_ports": []
+      },
+      "suid": {
+        "interval": "6h"
+      },
+      "output": {
+        "stdout": true
+      },
+      "alerts": {
+        "url_env": "PISENTRY_WEBHOOK_URL",
+        "token_env": "PISENTRY_WEBHOOK_TOKEN",
+        "min_severity": "high",
+        "max_per_hour": 30
+      }
+    }
