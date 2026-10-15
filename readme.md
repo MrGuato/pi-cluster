@@ -139,7 +139,7 @@ The cluster is instrumented with **kube-prometheus-stack**:
 - **Prometheus** scrapes metrics from all nodes, pods, and Longhorn volumes
 - **Grafana** provides dashboards (currently internal-only via port-forward)
 - **Longhorn ServiceMonitor** feeds storage metrics into Prometheus
-- **Custom status dashboard** at [status.deleontech.net](https://status.deleontech.net) shows live node metrics, service health, and cluster topology via a metrics sidecar querying Prometheus
+- **Custom status dashboard** at [status.deleontech.net](https://status.deleontech.net) shows live node metrics, per-service health with 7-day hourly availability, 24h trend sparklines, platform checks, and the result of the last PR security review. A sidecar queries Prometheus and the public GitHub Actions API and writes static JSON for nginx
 
 ---
 

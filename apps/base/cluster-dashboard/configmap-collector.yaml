@@ -5,66 +5,230 @@ metadata:
 data:
   collect.sh: |
     #!/bin/sh
+    # Status dashboard collector.
+    # Fast loop (30s): metrics.json  - nodes, workloads, pods, scrape targets.
+    # Slow loop (5m):  history.json  - 7d hourly availability, 24h sparklines,
+    #                                  restarts, volumes, Renovate, Longhorn, CI.
+    # Prometheus is the only data source, plus one unauthenticated read of the
+    # public GitHub Actions API for the Security Review workflow.
     apk add --no-cache curl jq > /dev/null 2>&1
-    PROM="http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
-    OUT="/data/metrics.json"
-    mkdir -p /tmp/m
 
-    q() { curl -fsG "$PROM" --data-urlencode "query=$1" 2>/dev/null || echo '{"data":{"result":[]}}'; }
+    PROM="${PROM:-http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1}"
+    OUT_DIR="${OUT_DIR:-/data}"
+    SCRIPTS="${SCRIPTS:-/scripts}"
+    GH_REPO="${GH_REPO:-MrGuato/pi-cluster}"
+    GH_WORKFLOW="${GH_WORKFLOW:-security-review.yml}"
+    INTERVAL="${INTERVAL:-30}"
+    SLOW_EVERY="${SLOW_EVERY:-10}"   # 10 x 30s = 5 min
+    CI_EVERY="${CI_EVERY:-20}"       # 20 x 30s = 10 min
+    T=/tmp/m
+    mkdir -p "$T" "$OUT_DIR"
 
-    echo "[collector] Starting metrics loop (30s interval)"
+    EMPTY='{"status":"success","data":{"resultType":"vector","result":[]}}'
+    now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+    q()  { curl -fsG -m 20 "$PROM/query" --data-urlencode "query=$1" 2>/dev/null || echo "$EMPTY"; }
+    qr() { curl -fsG -m 60 "$PROM/query_range" --data-urlencode "query=$1" \
+             --data-urlencode "start=$2" --data-urlencode "end=$3" --data-urlencode "step=$4" 2>/dev/null || echo "$EMPTY"; }
+    gh() { curl -fsS -m 15 -H "Accept: application/vnd.github+json" -H "User-Agent: pi-cluster-status" "https://api.github.com/$1" 2>/dev/null; }
 
+    collect_fast() {
+      q 'node_uname_info'                                                               > $T/nodes.json
+      q 'kube_node_info'                                                                > $T/node_info.json
+      q 'kube_node_role{role="control-plane"}'                                          > $T/node_role.json
+      q '100 * (1 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])))'  > $T/cpu.json
+      q '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'       > $T/mem.json
+      q 'node_memory_MemTotal_bytes'                                                    > $T/memtotal.json
+      q 'count by(instance)(node_cpu_seconds_total{mode="idle"})'                       > $T/cores.json
+      q 'node_boot_time_seconds'                                                        > $T/boot.json
+      q 'max by(instance)(node_thermal_zone_temp)'                                      > $T/temp.json
+      q '100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})' > $T/disk.json
+      q 'kube_node_status_condition{condition="Ready",status="true"}'                   > $T/ready.json
+      q 'sum by(node)(kube_node_status_condition{condition=~"MemoryPressure|DiskPressure|PIDPressure",status="true"})' > $T/pressure.json
+      q 'count by(node)(kube_pod_info)'                                                 > $T/pods.json
+      q 'count(kube_pod_status_phase{phase="Running"} == 1)'                            > $T/pods_running.json
+      q 'count(kube_pod_info)'                                                          > $T/pods_total.json
+      q 'kube_deployment_status_replicas_available'                                     > $T/dep_avail.json
+      q 'kube_deployment_spec_replicas'                                                 > $T/dep_desired.json
+      q 'kube_statefulset_status_replicas_ready'                                        > $T/sts_ready.json
+      q 'kube_statefulset_replicas'                                                     > $T/sts_desired.json
+      q 'kube_daemonset_status_number_ready'                                            > $T/ds_ready.json
+      q 'kube_daemonset_status_desired_number_scheduled'                                > $T/ds_desired.json
+      q 'sum(up)'                                                                       > $T/up_sum.json
+      q 'count(up)'                                                                     > $T/up_count.json
+
+      jq -c -n -f "$SCRIPTS/fast.jq" --arg ts "$(now_iso)" --argjson now_ts "$(date -u +%s)" \
+        --slurpfile nodes $T/nodes.json --slurpfile node_info $T/node_info.json --slurpfile node_role $T/node_role.json \
+        --slurpfile cpu $T/cpu.json --slurpfile mem $T/mem.json --slurpfile memtotal $T/memtotal.json \
+        --slurpfile cores $T/cores.json --slurpfile boot $T/boot.json --slurpfile temp $T/temp.json \
+        --slurpfile disk $T/disk.json --slurpfile ready $T/ready.json --slurpfile pressure $T/pressure.json \
+        --slurpfile pods $T/pods.json --slurpfile pods_running $T/pods_running.json --slurpfile pods_total $T/pods_total.json \
+        --slurpfile da $T/dep_avail.json --slurpfile dd $T/dep_desired.json \
+        --slurpfile sr $T/sts_ready.json --slurpfile sd $T/sts_desired.json \
+        --slurpfile dr $T/ds_ready.json --slurpfile dsd $T/ds_desired.json \
+        --slurpfile up_sum $T/up_sum.json --slurpfile up_count $T/up_count.json \
+        > "$OUT_DIR/metrics.json.tmp" 2>$T/fast.err && mv "$OUT_DIR/metrics.json.tmp" "$OUT_DIR/metrics.json" \
+        || echo "[collector] fast: jq failed: $(head -c 300 $T/fast.err)"
+    }
+
+    collect_ci() {
+      gh "repos/$GH_REPO/actions/workflows/$GH_WORKFLOW/runs?per_page=1&status=completed" > $T/ci_runs.json || return 1
+      id=$(jq -r '.workflow_runs[0].id // empty' $T/ci_runs.json 2>/dev/null)
+      [ -n "$id" ] || return 1
+      gh "repos/$GH_REPO/actions/runs/$id/jobs" > $T/ci_jobs.json || return 1
+      jq -n --slurpfile r $T/ci_runs.json --slurpfile j $T/ci_jobs.json --arg ts "$(now_iso)" '
+        ($r[0].workflow_runs[0]) as $run |
+        { fetched_at: $ts,
+          total_runs: $r[0].total_count,
+          run_number: $run.run_number,
+          conclusion: $run.conclusion,
+          event: $run.event,
+          head_branch: $run.head_branch,
+          updated_at: $run.updated_at,
+          html_url: $run.html_url,
+          jobs: [ $j[0].jobs[] | { name, conclusion, completed_at } ] }' \
+        > $T/ci.json.tmp 2>/dev/null && mv $T/ci.json.tmp $T/ci.json
+    }
+
+    collect_history() {
+      now=$(date -u +%s)
+      # 7 days of trailing 1h windows, newest window ends now.
+      H_STEP=3600; H_N=168; H_START=$(( now - (H_N - 1) * H_STEP ))
+      # 24 hours at 15 min, newest point is now.
+      D_STEP=900;  D_N=97;  D_START=$(( now - (D_N - 1) * D_STEP ))
+
+      qr 'avg_over_time((kube_deployment_status_replicas_available >= bool kube_deployment_spec_replicas)[1h:1m])'                  $H_START $now $H_STEP > $T/h_dep.json
+      qr 'avg_over_time((kube_statefulset_status_replicas_ready >= bool kube_statefulset_replicas)[1h:1m])'                          $H_START $now $H_STEP > $T/h_sts.json
+      qr 'avg_over_time((kube_daemonset_status_number_ready >= bool kube_daemonset_status_desired_number_scheduled)[1h:1m])'         $H_START $now $H_STEP > $T/h_ds.json
+      qr 'avg_over_time(up{job="node-exporter"}[1h])'                                                                                $H_START $now $H_STEP > $T/h_node_up.json
+      qr '100 * (1 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])))'                                               $D_START $now $D_STEP > $T/d_node_cpu.json
+      qr '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'                                                    $D_START $now $D_STEP > $T/d_node_mem.json
+      qr 'avg(100 * (1 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m]))))'                                          $D_START $now $D_STEP > $T/d_cpu.json
+      qr '(1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes)) * 100'                                          $D_START $now $D_STEP > $T/d_mem.json
+      qr 'count(kube_pod_status_phase{phase="Running"} == 1)'                                                                        $D_START $now $D_STEP > $T/d_pods.json
+      q  'node_uname_info'                                                                        > $T/h_nodes.json
+      q  'sum(increase(kube_pod_container_status_restarts_total[24h]))'                           > $T/restarts.json
+      q  'topk(3, sum by(namespace,pod)(increase(kube_pod_container_status_restarts_total[24h])) > 0.5)' > $T/restarts_top.json
+      q  'count(kube_persistentvolume_status_phase{phase="Bound"} == 1)'                          > $T/pv_bound.json
+      q  'count(kube_persistentvolume_info)'                                                      > $T/pv_total.json
+      q  'max(kube_cronjob_status_last_successful_time{cronjob="renovate"})'                      > $T/renovate.json
+      q  'count(longhorn_volume_robustness)'                                                      > $T/lh_total.json
+      q  'count(longhorn_volume_robustness == 1)'                                                 > $T/lh_healthy.json
+      q  'count(longhorn_volume_robustness == 2)'                                                 > $T/lh_degraded.json
+      q  'count(longhorn_volume_robustness == 3)'                                                 > $T/lh_faulted.json
+      [ -f $T/ci.json ] || echo 'null' > $T/ci.json
+
+      jq -c -n -f "$SCRIPTS/history.jq" --arg ts "$(now_iso)" \
+        --argjson now "$now" --argjson h_step "$H_STEP" --argjson h_n "$H_N" --argjson d_step "$D_STEP" --argjson d_n "$D_N" \
+        --slurpfile h_dep $T/h_dep.json --slurpfile h_sts $T/h_sts.json --slurpfile h_ds $T/h_ds.json --slurpfile h_node_up $T/h_node_up.json \
+        --slurpfile d_node_cpu $T/d_node_cpu.json --slurpfile d_node_mem $T/d_node_mem.json \
+        --slurpfile d_cpu $T/d_cpu.json --slurpfile d_mem $T/d_mem.json --slurpfile d_pods $T/d_pods.json \
+        --slurpfile nodes $T/h_nodes.json --slurpfile restarts $T/restarts.json --slurpfile restarts_top $T/restarts_top.json \
+        --slurpfile pv_bound $T/pv_bound.json --slurpfile pv_total $T/pv_total.json --slurpfile renovate $T/renovate.json \
+        --slurpfile lh_total $T/lh_total.json --slurpfile lh_healthy $T/lh_healthy.json \
+        --slurpfile lh_degraded $T/lh_degraded.json --slurpfile lh_faulted $T/lh_faulted.json \
+        --slurpfile ci $T/ci.json \
+        > "$OUT_DIR/history.json.tmp" 2>$T/hist.err && mv "$OUT_DIR/history.json.tmp" "$OUT_DIR/history.json" \
+        || echo "[collector] history: jq failed: $(head -c 300 $T/hist.err)"
+    }
+
+    echo "[collector] start: fast every ${INTERVAL}s, history every $((INTERVAL * SLOW_EVERY))s, ci every $((INTERVAL * CI_EVERY))s"
+    i=0
     while true; do
-      q 'node_uname_info' > /tmp/m/nodes.json
-      q '100 * (1 - avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])))' > /tmp/m/cpu.json
-      q '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100' > /tmp/m/mem.json
-      q 'node_memory_MemTotal_bytes' > /tmp/m/memtotal.json
-      q 'count by(node)(kube_pod_info)' > /tmp/m/pods.json
-      q 'count(kube_pod_info)' > /tmp/m/totalpods.json
-      q 'kube_deployment_status_replicas_available' > /tmp/m/dep_avail.json
-      q 'kube_deployment_spec_replicas' > /tmp/m/dep_desired.json
-      q 'node_boot_time_seconds' > /tmp/m/boot.json
-
-      jq -n \
-        --slurpfile nodes /tmp/m/nodes.json \
-        --slurpfile cpu /tmp/m/cpu.json \
-        --slurpfile mem /tmp/m/mem.json \
-        --slurpfile memtotal /tmp/m/memtotal.json \
-        --slurpfile pods /tmp/m/pods.json \
-        --slurpfile totalpods /tmp/m/totalpods.json \
-        --slurpfile da /tmp/m/dep_avail.json \
-        --slurpfile dd /tmp/m/dep_desired.json \
-        --slurpfile boot /tmp/m/boot.json \
-        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        '{
-          timestamp: $ts,
-          nodes: [
-            $nodes[0].data.result[]
-            | .metric as $m
-            | {
-                name: $m.nodename,
-                instance: $m.instance,
-                cpu: ([ $cpu[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber | (. * 10 | round / 10) ] | first // 0),
-                memory: ([ $mem[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber | (. * 10 | round / 10) ] | first // 0),
-                memory_total_gb: ([ $memtotal[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber / 1073741824 | (. * 10 | round / 10) ] | first // 0),
-                uptime_seconds: ([ $boot[0].data.result[] | select(.metric.instance == $m.instance) | .value[1] | tonumber | (now - .) ] | first // 0),
-                pods: ([ $pods[0].data.result[] | select(.metric.node == $m.nodename) | .value[1] | tonumber ] | first // 0)
-              }
-          ] | sort_by(.name),
-          total_pods: ($totalpods[0].data.result[0].value[1] // "0" | tonumber),
-          services: [
-            $da[0].data.result[]
-            | .metric as $m
-            | {
-                name: $m.deployment,
-                namespace: $m.namespace,
-                available: (.value[1] | tonumber),
-                desired: ([ $dd[0].data.result[] | select(.metric.deployment == $m.deployment and .metric.namespace == $m.namespace) | .value[1] | tonumber ] | first // 1),
-                healthy: ( (.value[1] | tonumber) >= ([ $dd[0].data.result[] | select(.metric.deployment == $m.deployment and .metric.namespace == $m.namespace) | .value[1] | tonumber ] | first // 1) )
-              }
-          ] | sort_by(.namespace)
-        }' > "${OUT}.tmp" 2>/dev/null && mv "${OUT}.tmp" "$OUT"
-
-      echo "[collector] $(date -u +%H:%M:%S) updated"
-      sleep 30
+      if [ $(( i % CI_EVERY )) -eq 0 ]; then collect_ci || echo "[collector] ci: fetch failed, keeping last"; fi
+      if [ $(( i % SLOW_EVERY )) -eq 0 ]; then collect_history; fi
+      collect_fast
+      echo "[collector] $(date -u +%H:%M:%S) tick $i"
+      i=$(( i + 1 ))
+      [ -n "$ONCE" ] && exit 0
+      sleep "$INTERVAL"
     done
+  fast.jq: |
+    # Builds metrics.json from instant-query results.
+    def val: .value[1] | tonumber;
+    def r1: (. * 10 | round) / 10;
+    def res($x): $x[0].data.result;
+    def by_inst($x; $i): [ res($x)[] | select(.metric.instance == $i) | val ] | first;
+    def by_node($x; $n): [ res($x)[] | select(.metric.node == $n) | val ] | first;
+    def lookup($x; $label): (res($x) | map({ key: (.metric.namespace + "/" + .metric[$label]), value: val }) | from_entries);
+    def os_short: if test("Debian") then "Debian" elif test("Red Hat") then "RHEL" else (split(" ")[0]) end;
+    def workloads($avail; $desired; $kind; $label):
+      (lookup($desired; $label)) as $want
+      | [ res($avail)[] | .metric as $m | (.metric.namespace + "/" + .metric[$label]) as $k | val as $a
+          | { kind: $kind, name: $m[$label], namespace: $m.namespace,
+              available: $a, desired: ($want[$k] // 1), healthy: ($a >= ($want[$k] // 1)) } ];
+
+    (res($node_role) | map(.metric.node)) as $control
+    | (res($node_info) | map({ key: .metric.node, value: .metric }) | from_entries) as $info
+    | {
+      timestamp: $ts,
+      nodes: ([ res($nodes)[] | .metric as $m | $m.nodename as $n
+        | { name: $n,
+            instance: $m.instance,
+            arch: (if $m.machine == "aarch64" then "arm64" elif $m.machine == "x86_64" then "amd64" else $m.machine end),
+            os: (($info[$n].os_image // "") | os_short),
+            kubelet: (($info[$n].kubelet_version // "") | sub("\\+k3s[0-9]+$"; "")),
+            control_plane: ($control | index($n) != null),
+            cores: (by_inst($cores; $m.instance) // 0),
+            cpu: ((by_inst($cpu; $m.instance) // 0) | r1),
+            memory: ((by_inst($mem; $m.instance) // 0) | r1),
+            memory_total_gb: (((by_inst($memtotal; $m.instance) // 0) / 1073741824) | r1),
+            uptime_seconds: (((by_inst($boot; $m.instance) // $now_ts) | ($now_ts - .)) | floor),
+            temp_c: (by_inst($temp; $m.instance) // null | if . == null then null else r1 end),
+            disk_root_pct: (by_inst($disk; $m.instance) // null | if . == null then null else r1 end),
+            ready: (by_node($ready; $n) // 0) == 1,
+            pressure: (by_node($pressure; $n) // 0),
+            pods: (by_node($pods; $n) // 0) }
+      ] | sort_by(.control_plane | not) | sort_by(.name) | sort_by(.control_plane | not)),
+      pods_running: (res($pods_running)[0].value[1] // "0" | tonumber),
+      pods_total:   (res($pods_total)[0].value[1]   // "0" | tonumber),
+      targets_up:   (res($up_sum)[0].value[1]       // "0" | tonumber),
+      targets_total:(res($up_count)[0].value[1]     // "0" | tonumber),
+      workloads: ((workloads($da; $dd; "deployment"; "deployment")
+                 + workloads($sr; $sd; "statefulset"; "statefulset")
+                 + workloads($dr; $dsd; "daemonset"; "daemonset")) | sort_by(.namespace, .name))
+    }
+  history.jq: |
+    # Builds history.json from range-query results. Arrays are aligned to a fixed
+    # grid of timestamps so the page can index them without carrying timestamps.
+    def val: .value[1] | tonumber;
+    def res($x): $x[0].data.result;
+    def r1: (. * 10 | round) / 10;
+    def r3: (. * 1000 | round) / 1000;
+    def grid($end; $step; $n): [ range($end - ($n - 1) * $step; $end + 1; $step) ];
+    def align($values; $g):
+      ($values | map({ key: (.[0] | tostring), value: (.[1] | tonumber) }) | from_entries) as $m
+      | $g | map($m[tostring] // null);
+    def series($x; $g; keyf; roundf):
+      ( res($x) | map({ key: (.metric | keyf), value: (align(.values; $g) | map(if . == null then null else roundf end)) }) | from_entries );
+    def single($x; $g; roundf): (res($x)[0].values // []) as $v | (align($v; $g) | map(if . == null then null else roundf end));
+    def scalar($x): (res($x)[0].value[1] // null | if . == null then null else tonumber end);
+
+    (grid($now; $h_step; $h_n)) as $hg
+    | (grid($now; $d_step; $d_n)) as $dg
+    | (res($nodes) | map({ key: .metric.instance, value: .metric.nodename }) | from_entries) as $name_of
+    | {
+      timestamp: $ts,
+      week: {
+        end: $now, step: $h_step, n: $h_n,
+        workloads: ( series($h_dep; $hg; (.namespace + "/" + .deployment); r3)
+                   + series($h_sts; $hg; (.namespace + "/" + .statefulset); r3)
+                   + series($h_ds;  $hg; (.namespace + "/" + .daemonset); r3) ),
+        nodes: ( res($h_node_up) | map({ key: ($name_of[.metric.instance] // .metric.instance), value: (align(.values; $hg) | map(if . == null then null else r3 end)) }) | from_entries )
+      },
+      day: {
+        end: $now, step: $d_step, n: $d_n,
+        cluster: { cpu: single($d_cpu; $dg; r1), mem: single($d_mem; $dg; r1), pods: single($d_pods; $dg; .) },
+        nodes: ( [ res($d_node_cpu)[] | .metric.instance ] | unique | map(. as $i
+                  | { key: ($name_of[$i] // $i),
+                      value: { cpu: ([ res($d_node_cpu)[] | select(.metric.instance == $i) | .values ] | first // [] | align(.; $dg) | map(if . == null then null else r1 end)),
+                               mem: ([ res($d_node_mem)[] | select(.metric.instance == $i) | .values ] | first // [] | align(.; $dg) | map(if . == null then null else r1 end)) } })
+                | from_entries )
+      },
+      restarts_24h: (scalar($restarts) // 0 | round),
+      restarts_top: [ res($restarts_top)[] | { namespace: .metric.namespace, pod: .metric.pod, count: (val | round) } ],
+      pv: { bound: (scalar($pv_bound) // 0), total: (scalar($pv_total) // 0) },
+      renovate_last_success: scalar($renovate),
+      longhorn: (scalar($lh_total) as $t | if $t == null then null else
+                  { total: $t, healthy: (scalar($lh_healthy) // 0), degraded: (scalar($lh_degraded) // 0), faulted: (scalar($lh_faulted) // 0) } end),
+      ci: $ci[0]
+    }

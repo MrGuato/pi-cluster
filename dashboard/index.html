@@ -1,426 +1,631 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>pi-cluster | Status Dashboard</title>
-<meta name="description" content="Live Kubernetes homelab status dashboard - k3s on mixed architecture, managed through FluxCD GitOps." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>pi-cluster status</title>
+<meta name="description" content="Live status of a k3s homelab: nodes, services, 7 day availability, platform and security posture.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%231a9b4a'/%3E%3C/svg%3E">
 <style>
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#0a0c14;--card:#12141f;--card-alt:#0d0f18;
-  --border:#1e2235;--border-h:#2a2f48;
-  --text:#e4e6f0;--dim:#5a5f7a;--muted:#3d4260;
-  --green:#00e5a0;--purple:#6c7aed;--yellow:#ffc857;
-  --orange:#f48120;--pink:#e056a0;--red:#ff4d6a;--blue:#38bdf8;
-  --mono:'JetBrains Mono','Fira Code',monospace;
-  --sans:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+  --bg:#f4f5f7;--surface:#ffffff;--surface-2:#eef0f3;--border:#dfe2e7;--border-2:#c5cad2;
+  --text:#15181c;--text-2:#59606e;--text-3:#8a919e;
+  --ok:#1a9b4a;--warn:#d0860a;--bad:#d4382f;--info:#6b4fd8;--nodata:#d9dde3;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --r:2px;
 }
-html{scroll-behavior:smooth}
-body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--sans);overflow-x:hidden}
-.grid-bg{position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(30,34,53,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(30,34,53,.07) 1px,transparent 1px);background-size:64px 64px}
-.top-glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:400px;pointer-events:none;background:radial-gradient(ellipse,rgba(0,229,160,.024) 0%,transparent 70%)}
-.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:48px 24px 64px}
-.section-label{font-size:12px;font-weight:700;color:var(--dim);font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;gap:8px}
-.section-label::after{content:'';flex:1;height:1px;background:var(--border);margin-left:4px}
-.glow-dot{display:inline-block;border-radius:50%;flex-shrink:0}
-.glow-dot.green{background:var(--green);box-shadow:0 0 8px rgba(0,229,160,.53),0 0 16px rgba(0,229,160,.27)}
-.glow-dot.yellow{background:var(--yellow);box-shadow:0 0 8px rgba(255,200,87,.53),0 0 16px rgba(255,200,87,.27)}
-.glow-dot.red{background:var(--red);box-shadow:0 0 8px rgba(255,77,106,.53),0 0 16px rgba(255,77,106,.27)}
-.fade-up{opacity:0;transform:translateY(20px);transition:all .8s cubic-bezier(.4,0,.2,1)}
-.fade-up.visible{opacity:1;transform:translateY(0)}
-.header{margin-bottom:48px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:24px}
-.header h1{font-size:36px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
-.header p{font-size:15px;color:var(--dim);margin-top:8px;max-width:480px;line-height:1.5}
-.api-status{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);font-weight:600;padding:4px 10px;border-radius:6px;margin-top:8px}
-.api-status.live{color:var(--green);background:rgba(0,229,160,.08);border:1px solid rgba(0,229,160,.2)}
-.api-status.offline{color:var(--red);background:rgba(255,77,106,.08);border:1px solid rgba(255,77,106,.2)}
-.header-right{text-align:right}
-#uptime{font-family:var(--mono);font-size:13px;color:var(--green);font-weight:600}
-.stats{display:flex;gap:16px;margin-bottom:40px;flex-wrap:wrap}
-.stat{background:linear-gradient(135deg,var(--card),var(--card-alt));border:1px solid var(--border);border-radius:12px;padding:18px 22px;flex:1 1 0;min-width:130px}
-.stat-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-family:var(--mono);margin-bottom:8px}
-.stat-value{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1.1;transition:color .3s}
-.stat-sub{font-size:10px;color:var(--muted);margin-top:4px;font-family:var(--mono)}
-.flow{display:flex;align-items:center;overflow-x:auto;padding:4px 0;-webkit-overflow-scrolling:touch}
-.flow-step{text-align:center;padding:12px 20px;border-radius:10px;background:var(--card);min-width:110px;flex-shrink:0}
-.flow-step-label{font-size:13px;font-weight:700;font-family:var(--mono);margin-bottom:2px}
-.flow-step-sub{font-size:10px;color:var(--dim)}
-.flow-arrow{width:32px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;flex-shrink:0}
-.nodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
-.node{background:linear-gradient(135deg,var(--card),var(--card-alt));border:1px solid var(--border);border-radius:14px;padding:22px;position:relative;overflow:hidden;animation:fadeUp .6s cubic-bezier(.4,0,.2,1) both}
-.node.server{border-color:rgba(0,229,160,.2)}
-.node-glow{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--green),transparent)}
-.node-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px}
-.node-name{font-family:var(--mono);font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:3px}
-.node-role{font-size:11px;font-family:var(--mono)}
-.node-ram{padding:3px 10px;border-radius:6px;background:rgba(0,229,160,.07);border:1px solid rgba(0,229,160,.19);font-size:11px;color:var(--green);font-family:var(--mono);font-weight:600}
-.node-metrics{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-.metric-head{display:flex;justify-content:space-between;margin-bottom:5px}
-.metric-label{font-size:10px;color:var(--dim);font-family:var(--mono)}
-.metric-val{font-size:10px;font-family:var(--mono);font-weight:600;transition:color .3s}
-.bar{width:100%;height:5px;border-radius:2px;background:#1a1d2e;overflow:hidden}
-.bar-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1),background .3s}
-.node-foot{display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:10px;font-size:10px;color:var(--muted);font-family:var(--mono)}
-.services{display:flex;flex-direction:column;gap:10px}
-.svc{background:linear-gradient(135deg,var(--card),var(--card-alt));border:1px solid var(--border);border-radius:10px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;text-decoration:none;color:inherit;animation:fadeUp .4s cubic-bezier(.4,0,.2,1) both}
-.svc.clickable{cursor:pointer}
-.svc.clickable:hover{background:#151828;border-color:var(--border-h)}
-.svc-left{display:flex;align-items:center;gap:12px;min-width:180px;flex:1}
-.svc-name{font-size:14px;font-weight:700;color:var(--text);font-family:var(--mono)}
-.svc-ns{font-size:10px;color:var(--muted);font-family:var(--mono);margin-left:8px}
-.svc-desc{font-size:12px;color:var(--dim);margin-top:1px}
-.svc-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.svc-tag{padding:2px 8px;border-radius:4px;background:#1a1d2e;font-size:10px;color:var(--dim);font-family:var(--mono)}
-.svc-pods{font-family:var(--mono);font-size:12px;color:var(--green);font-weight:600}
-.security{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
-.sec-card{background:linear-gradient(135deg,var(--card),var(--card-alt));border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:flex-start;gap:12px}
-.sec-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
-.sec-label{font-size:13px;font-weight:700;color:var(--text);font-family:var(--mono);margin-bottom:3px}
-.sec-detail{font-size:12px;color:var(--dim);line-height:1.5}
-.stack{display:flex;flex-wrap:wrap;gap:10px}
-.stack-pill{padding:6px 14px;border-radius:8px;background:var(--card);border:1px solid var(--border);font-size:12px;color:#8b8fb0;font-family:var(--mono);font-weight:500;display:inline-flex;align-items:center;gap:8px}
-.stack-cat{color:var(--muted);font-size:10px}
-footer{border-top:1px solid var(--border);padding-top:32px;text-align:center}
-.social{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
-.social a{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;background:transparent;border:1px solid var(--border);color:var(--dim);font-size:12px;font-family:var(--mono);font-weight:500;text-decoration:none;transition:all .2s ease}
-.social a:hover{background:#1a1d2e;border-color:var(--border-h);color:var(--text)}
-.footer-tagline{font-size:13px;font-family:var(--mono);font-weight:600;background:linear-gradient(90deg,var(--green),var(--blue),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.footer-motto{font-size:11px;font-family:var(--mono);font-style:italic;color:var(--dim);margin-top:6px}
-.last-update{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:4px}
-@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1013;--surface:#15181c;--surface-2:#1c2026;--border:#262b32;--border-2:#363c45;
+    --text:#e6e8eb;--text-2:#9aa3b1;--text-3:#6b7482;
+    --ok:#2fbf66;--warn:#e3a12b;--bad:#e5534b;--info:#9a8cf5;--nodata:#2a2f37;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1013;--surface:#15181c;--surface-2:#1c2026;--border:#262b32;--border-2:#363c45;
+  --text:#e6e8eb;--text-2:#9aa3b1;--text-3:#6b7482;
+  --ok:#2fbf66;--warn:#e3a12b;--bad:#e5534b;--info:#9a8cf5;--nodata:#2a2f37;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.45 var(--sans);min-height:100vh}
+a{color:inherit}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:1120px;margin:0 auto;padding:36px 24px 48px}
+
+.hdr>div{min-width:0}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap;margin-bottom:28px}
+.status-line{display:flex;align-items:center;gap:8px;font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.04em}
+.status-line .age{font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-3)}
+.hdr h1{font-size:28px;font-weight:650;letter-spacing:-.02em;margin:8px 0 6px}
+.hdr .sub{color:var(--text-2);max-width:520px;font-size:14px}
+.hdr-r{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.kv{display:flex;gap:12px;font-size:12px}.kv .k{color:var(--text-3)}.kv .v{font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.seg button{appearance:none;border:0;background:transparent;color:var(--text-2);font:500 12px var(--sans);padding:5px 10px;cursor:pointer;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--surface-2);color:var(--info)}
+.seg button:focus-visible{outline:2px solid var(--info);outline-offset:-2px}
+
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;background:var(--text-3)}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.dim{color:var(--text-3)}
+
+section{margin-bottom:32px}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap}
+.sec-h h2{font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text-2)}
+.sec-h .meta{font:12px var(--mono);color:var(--text-3)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-width:0}
+
+.tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border)}
+.tile{background:var(--surface);padding:14px 16px;min-height:104px;display:flex;flex-direction:column;min-width:0}
+.t-k{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+.t-v{font:600 24px var(--mono);margin-top:6px;letter-spacing:-.01em;line-height:1.1}
+.t-s{font-size:12px;color:var(--text-3);margin-top:3px}
+.spark{display:block;width:100%;min-width:0;height:26px;margin-top:auto;padding-top:8px}
+.sp-line{fill:none;stroke:var(--info);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.sp-area{fill:var(--info);opacity:.1}
+
+.flow{display:flex;overflow-x:auto}
+.step{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);padding:10px 12px}
+.step + .step{margin-left:-1px}
+.step small{display:block;font:11px var(--mono);color:var(--text-3)}
+.step b{display:block;font:600 13px var(--mono);margin:2px 0}
+.step span{font-size:11px;color:var(--text-2)}
+
+.nodes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.node{padding:16px}
+.n-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:8px}
+.n-name{font:600 15px var(--mono);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{font:500 10px var(--mono);text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border:1px solid var(--border-2);border-radius:var(--r);color:var(--text-2)}
+.n-meta{font:12px var(--mono);color:var(--text-3);margin-top:4px}
+.n-metrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.n-metrics>div{min-width:0}
+.m-h{display:flex;justify-content:space-between;font:11px var(--mono);color:var(--text-3);margin-bottom:4px}
+.m-h b{color:var(--text);font-weight:600}
+.m-h b.warn,.n-foot b.warn{color:var(--warn)}.m-h b.bad,.n-foot b.bad{color:var(--bad)}
+.bar{height:4px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}
+.n-spark{height:22px;padding-top:6px;margin-top:0}
+.n-foot{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font:11px var(--mono);color:var(--text-3)}
+.n-foot b{color:var(--text-2);font-weight:500}
+.strip{display:block;width:100%;min-width:0;height:18px}
+.n-strip{margin-top:10px}
+.c-ok{fill:var(--ok)}.c-warn{fill:var(--warn)}.c-bad{fill:var(--bad)}.c-na{fill:var(--nodata)}
+
+.svcs{display:flex;flex-direction:column;gap:8px}
+.svc{padding:12px 16px}
+.s-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.s-main{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 220px}
+.s-name{font-weight:600;font-size:14px}
+.s-ns{font:11px var(--mono);color:var(--text-3);margin-left:8px}
+.s-desc{font-size:12px;color:var(--text-3)}
+.s-parts{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:11px var(--mono);padding:2px 7px;border:1px solid var(--border);border-radius:var(--r);color:var(--text-2);background:var(--surface-2);white-space:nowrap}
+.chip.bad{border-color:var(--bad);color:var(--bad)}.chip.warn{border-color:var(--warn);color:var(--warn)}
+.s-pct{font:600 13px var(--mono);min-width:64px;text-align:right}
+.s-strip{display:flex;align-items:center;gap:8px;margin-top:10px}
+.s-strip .strip{flex:1;min-width:0;height:20px}
+.s-strip span{font:10px var(--mono);color:var(--text-3);white-space:nowrap}
+.legend{display:flex;gap:12px;font:11px var(--mono);color:var(--text-3)}
+.legend i{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:-1px}
+
+.plat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border)}
+.prow{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface);padding:10px 14px;font-size:13px}
+.prow .k{color:var(--text-2)}
+.prow .v{font:600 13px var(--mono);text-align:right}
+.prow .v small{font-weight:400;color:var(--text-3);margin-left:6px}
+
+.sec{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sc{padding:14px 16px}
+.sc-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px}
+.sc-h b{font-size:13px;font-weight:600}
+.sc p{font-size:12px;color:var(--text-2);line-height:1.45}
+.sc .live{margin-top:8px;font:11px var(--mono);color:var(--text-3);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sc .live a{color:var(--text-2)}
+
+.stack{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font:12px var(--mono);padding:5px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text-2)}
+.pill small{color:var(--text-3);margin-right:6px}
+
+footer{border-top:1px solid var(--border);padding-top:24px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;font-size:12px;color:var(--text-3)}
+footer nav{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px}
+footer nav a{font:500 12px var(--mono);color:var(--text-2);text-decoration:none;padding:5px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)}
+footer nav a:hover{color:var(--text);border-color:var(--border-2)}
+.made{font:600 14px var(--mono);color:var(--info);display:inline-flex;align-items:center;gap:7px}
+.made svg{width:14px;height:14px;fill:var(--info);display:block}
+.motto{font:italic 12px var(--mono);color:var(--text-3)}
+.ver{font:11px var(--mono);color:var(--text-3);margin-top:2px}
+.empty{padding:14px 16px;font:12px var(--mono);color:var(--text-3)}
+
+@media(max-width:900px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.sec{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){
-  .wrap{padding:24px 16px 48px}.header{margin-bottom:32px;flex-direction:column;gap:16px}
-  .header h1{font-size:28px}.header p{font-size:13px}
-  .header-right{text-align:left;display:flex;gap:16px;align-items:center}
-  .stats{gap:10px}.stat{flex:1 1 45%;min-width:0;padding:14px 16px}.stat-value{font-size:22px}
-  .flow-step{padding:10px 14px;min-width:80px}.flow-step-label{font-size:11px}.flow-step-sub{font-size:9px}.flow-arrow{width:20px}
-  .nodes{grid-template-columns:1fr;gap:12px}
-  .services{gap:8px}.svc{padding:12px 14px}.svc-name{font-size:12px}.svc-desc{font-size:11px}.svc-tag{display:none}
-  .security{grid-template-columns:1fr}.sec-card{padding:14px 16px}
+  .wrap{padding:24px 16px 40px}
+  .hdr{margin-bottom:20px}.hdr h1{font-size:24px}
+  .hdr-r{align-items:flex-start;flex-direction:row;flex-wrap:wrap;gap:12px 20px}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .nodes,.sec,.plat{grid-template-columns:minmax(0,1fr)}
+  .s-main{flex:1 1 100%}.s-pct{min-width:0;margin-left:auto}
 }
 </style>
 </head>
 <body>
-<div class="grid-bg"></div>
-<div class="top-glow"></div>
 <div class="wrap">
- 
-  <header class="header fade-up">
+
+  <header class="hdr">
     <div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <span class="glow-dot green" id="statusDot" style="width:10px;height:10px"></span>
-        <span id="statusText" style="font-size:12px;font-weight:600;color:var(--green);font-family:var(--mono);letter-spacing:.05em">ALL SYSTEMS OPERATIONAL</span>
-      </div>
+      <div class="status-line"><span class="dot" id="statusDot"></span><span id="statusText" class="dim">Connecting</span><span class="age" id="dataAge"></span></div>
       <h1>pi-cluster</h1>
-      <p>Self-hosted Kubernetes homelab running k3s on mixed architecture (ARM64 + x86_64), managed entirely through FluxCD GitOps.</p>
-      <div class="api-status live" id="apiStatus">
-        <span class="glow-dot green" style="width:6px;height:6px"></span>
-        <span>LIVE</span>
-      </div>
+      <p class="sub">k3s on Raspberry Pi 4 and x86 nodes. Managed with FluxCD. No inbound ports.</p>
     </div>
-    <div class="header-right">
-      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:4px">UPTIME</div>
-      <div id="uptime">loading...</div>
-      <div class="last-update" id="lastUpdate"></div>
+    <div class="hdr-r">
+      <div class="kv"><span class="k">Control plane up</span><span class="v mono" id="uptime">-</span></div>
+      <div class="kv"><span class="k">Updated</span><span class="v mono" id="lastUpdate">-</span></div>
+      <div class="seg" id="themeSeg" role="group" aria-label="Theme">
+        <button type="button" data-t="auto">Auto</button>
+        <button type="button" data-t="light">Light</button>
+        <button type="button" data-t="dark">Dark</button>
+      </div>
     </div>
   </header>
- 
-  <div class="stats fade-up" style="transition-delay:.2s">
-    <div class="stat"><div class="stat-label">Nodes</div><div class="stat-value" id="statNodes" style="color:var(--green)">-</div><div class="stat-sub">Mixed Arch</div></div>
-    <div class="stat"><div class="stat-label">Pods</div><div class="stat-value" id="statPods" style="color:var(--purple)">-</div><div class="stat-sub">Running</div></div>
-    <div class="stat"><div class="stat-label">Avg CPU</div><div class="stat-value" id="statCpu" style="color:var(--yellow)">-</div><div class="stat-sub">All nodes</div></div>
-    <div class="stat"><div class="stat-label">Avg Mem</div><div class="stat-value" id="statMem" style="color:var(--orange)">-</div><div class="stat-sub">All nodes</div></div>
-    <div class="stat"><div class="stat-label">Services</div><div class="stat-value" id="statSvcs" style="color:var(--pink)">-</div><div class="stat-sub">Healthy</div></div>
-  </div>
- 
-  <section style="margin-bottom:40px">
-    <div class="section-label">GitOps Pipeline</div>
+
+  <section>
+    <div class="tiles" id="tiles">
+      <div class="tile"><div class="t-k">Nodes</div><div class="t-v" id="tNodes">-</div><div class="t-s" id="tNodesSub">ready</div></div>
+      <div class="tile"><div class="t-k">Pods</div><div class="t-v" id="tPods">-</div><div class="t-s" id="tPodsSub">running</div><svg class="spark" id="sPods" aria-hidden="true"></svg></div>
+      <div class="tile"><div class="t-k">CPU</div><div class="t-v" id="tCpu">-</div><div class="t-s" id="tCpuSub">cluster average</div><svg class="spark" id="sCpu" aria-hidden="true"></svg></div>
+      <div class="tile"><div class="t-k">Memory</div><div class="t-v" id="tMem">-</div><div class="t-s" id="tMemSub">cluster used</div><svg class="spark" id="sMem" aria-hidden="true"></svg></div>
+      <div class="tile"><div class="t-k">Availability</div><div class="t-v" id="tAvail">-</div><div class="t-s" id="tAvailSub">7 days, all services</div></div>
+      <div class="tile"><div class="t-k">Restarts</div><div class="t-v" id="tRestarts">-</div><div class="t-s" id="tRestartsSub">last 24 hours</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h"><h2>Pipeline</h2><span class="meta">git to edge</span></div>
     <div class="flow" id="flow"></div>
   </section>
- 
-  <section style="margin-bottom:40px">
-    <div class="section-label">Cluster Nodes</div>
+
+  <section>
+    <div class="sec-h"><h2>Nodes</h2><span class="meta" id="nodesMeta"></span></div>
     <div class="nodes" id="nodes"></div>
   </section>
- 
-  <section style="margin-bottom:40px">
-    <div class="section-label">Deployed Services</div>
-    <div class="services" id="services"></div>
+
+  <section>
+    <div class="sec-h"><h2>Services</h2>
+      <div class="legend"><span><i style="background:var(--ok)"></i>up</span><span><i style="background:var(--warn)"></i>partial</span><span><i style="background:var(--bad)"></i>down</span><span><i style="background:var(--nodata)"></i>no data</span></div>
+    </div>
+    <div class="svcs" id="services"></div>
   </section>
- 
-  <section style="margin-bottom:40px">
-    <div class="section-label">Security Posture</div>
-    <div class="security" id="security"></div>
+
+  <section>
+    <div class="sec-h"><h2>Platform</h2><span class="meta" id="platMeta"></span></div>
+    <div class="plat" id="platform"></div>
   </section>
- 
-  <section style="margin-bottom:48px" class="fade-up">
-    <div class="section-label">Infrastructure Stack</div>
+
+  <section>
+    <div class="sec-h"><h2>Security</h2><span class="meta">posture and gates</span></div>
+    <div class="sec" id="security"></div>
+  </section>
+
+  <section>
+    <div class="sec-h"><h2>Stack</h2></div>
     <div class="stack" id="stack"></div>
   </section>
- 
+
   <footer>
-    <div class="social">
+    <nav>
       <a href="https://github.com/MrGuato" target="_blank" rel="noopener">GitHub</a>
       <a href="https://www.linkedin.com/in/jonathan-deleon-cism" target="_blank" rel="noopener">LinkedIn</a>
       <a href="https://mrguato.github.io/gitops-notes" target="_blank" rel="noopener">Blog</a>
       <a href="https://github.com/MrGuato/pi-cluster" target="_blank" rel="noopener">Source</a>
-    </div>
-    <div class="footer-tagline">Built with &#10084;&#65039; by Jonathan</div>
-    <div class="footer-motto">If it is not in Git, it does not exist.</div>
+    </nav>
+    <div class="made">Built with <svg viewBox="0 0 24 24" aria-label="love" role="img"><path d="M12 21s-7.5-4.6-9.7-9.3C.6 8 2.6 4 6.5 4c2 0 3.6 1.1 4.5 2.6C11.9 5.1 13.5 4 15.5 4c3.9 0 5.9 4 4.2 7.7C19.5 16.4 12 21 12 21z"/></svg> by Jonathan</div>
+    <div class="motto">If it is not in Git, it does not exist.</div>
+    <div class="ver" id="version"></div>
   </footer>
 </div>
- 
+
 <script>
-// ── Static data (security, stack, flow - these don't change) ──
-const SECURITY = [
-  { label: "Zero Trust Ingress", detail: "No open ports, Cloudflare Tunnels + Access OTP", color: "var(--blue)" },
-  { label: "Encrypted Secrets", detail: "SOPS + age, Flux-only decryption", color: "var(--purple)" },
-  { label: "GitOps-Only Changes", detail: "Immutable cluster, full audit trail in Git", color: "var(--green)" },
-  { label: "Namespace Isolation", detail: "Per-app namespaces with dedicated tunnels", color: "var(--pink)" },
-  { label: "Automated Patching", detail: "Renovate CronJob, pinned image tags", color: "var(--orange)" },
-  { label: "Pod Hardening", detail: "runAsNonRoot, resource limits, securityContext", color: "var(--yellow)" },
+'use strict';
+const VERSION = 'v5.0.0';
+const METRICS_EVERY = 30000, HISTORY_EVERY = 300000, STALE_AFTER = 150;
+
+// Namespace to display mapping. Unknown namespaces still render, using the namespace as the title.
+const GROUPS = {
+  'vikunja':         { title: 'Vikunja',           desc: 'Tasks',               order: 10 },
+  'linkding':        { title: 'Linkding',          desc: 'Bookmarks',           order: 11 },
+  'obsidian-sync':   { title: 'Obsidian LiveSync', desc: 'Notes sync',          order: 12 },
+  'docmost':         { title: 'Docmost',           desc: 'Wiki',                order: 13 },
+  'forgejo':         { title: 'Forgejo',           desc: 'Git hosting',         order: 14 },
+  'headlamp':        { title: 'Headlamp',          desc: 'Kubernetes UI',       order: 15 },
+  'monitoring':      { title: 'Observability',     desc: 'Prometheus, Grafana', order: 30 },
+  'longhorn-system': { title: 'Longhorn',          desc: 'Block storage',       order: 31 },
+  'velero':          { title: 'Velero',            desc: 'Backups',             order: 32 },
+  'falco':           { title: 'Falco',             desc: 'Runtime detection',   order: 33 },
+  'flux-system':     { title: 'FluxCD',            desc: 'GitOps controllers',  order: 34 },
+};
+const HIDE_NS = new Set(['kube-system', 'cluster-dashboard']);
+const HIDE_WL = /^(csi-|engine-image-|longhorn-driver-deployer|svclb-|kube-prometheus-stack-(operator|kube-state-metrics)$)/;
+const SHORT = {
+  'prometheus-kube-prometheus-stack-prometheus': 'prometheus',
+  'alertmanager-kube-prometheus-stack-alertmanager': 'alertmanager',
+  'kube-prometheus-stack-grafana': 'grafana',
+  'kube-prometheus-stack-prometheus-node-exporter': 'node-exporter',
+};
+const FLOW = [
+  { n: '01', label: 'Git push',   sub: 'pull request, review, merge' },
+  { n: '02', label: 'FluxCD',     sub: 'reconcile main' },
+  { n: '03', label: 'SOPS',       sub: 'decrypt with age in cluster' },
+  { n: '04', label: 'k3s',        sub: 'apply' },
+  { n: '05', label: 'Cloudflare', sub: 'tunnel and access' },
 ];
 const STACK = [
-  { n: "k3s", c: "Runtime" }, { n: "FluxCD", c: "GitOps" }, { n: "SOPS + age", c: "Secrets" },
-  { n: "Cloudflare Tunnels", c: "Ingress" }, { n: "Traefik", c: "Proxy" },
-  { n: "Prometheus", c: "Metrics" }, { n: "Grafana", c: "Viz" }, { n: "Longhorn", c: "Storage" }, { n: "Renovate", c: "Deps" },
+  ['Runtime', 'k3s'], ['GitOps', 'FluxCD'], ['Secrets', 'SOPS + age'], ['Ingress', 'Cloudflare Tunnel'],
+  ['Proxy', 'Traefik'], ['Metrics', 'Prometheus'], ['Dashboards', 'Grafana'], ['Storage', 'Longhorn'],
+  ['Backups', 'Velero'], ['Runtime security', 'Falco'], ['Updates', 'Renovate'],
 ];
-const FLOW = [
-  { label: "Git Push", sub: "pi-cluster", color: "var(--text)" },
-  { label: "FluxCD", sub: "Reconcile", color: "var(--green)" },
-  { label: "SOPS", sub: "Decrypt", color: "var(--yellow)" },
-  { label: "k3s", sub: "Apply", color: "var(--purple)" },
-  { label: "Cloudflare", sub: "Tunnel", color: "var(--orange)" },
-];
- 
-// Known service metadata (enriches Prometheus data)
-const SVC_META = {
-  "vikunja": { desc: "Task management", tags: ["React", "PostgreSQL"] },
-  "linkding": { desc: "Bookmark manager", tags: ["Python", "SQLite"] },
-  "couchdb": { desc: "Knowledge sync (Obsidian LiveSync)", tags: ["CouchDB", "Sync"], displayName: "Obsidian LiveSync" },
-  "kube-prometheus-stack-grafana": { desc: "Metrics and dashboards", tags: ["Prometheus", "Helm"], displayName: "Grafana" },
-  "cloudflared": { desc: "Cloudflare Tunnel agent", tags: ["Tunnel"] },
-  "longhorn-ui": { desc: "Distributed storage dashboard", tags: ["Storage", "CNCF"], displayName: "Longhorn" },
-};
- 
-// Node role mapping
-const NODE_ROLES = { "kubepi": "Server (Control Plane)", "kubethink": "Agent (Storage)", "kubepi-w1": "Agent", "kubepi-w2": "Agent" };
-const NODE_RAM = { "kubepi": "8GB", "kubethink": "8GB", "kubepi-w1": "4GB", "kubepi-w2": "2GB" };
-const NODE_ARCH = { "kubepi": "arm64 · Debian", "kubepi-w1": "arm64 · Debian", "kubepi-w2": "arm64 · Debian", "kubethink": "amd64 · RHEL" };
- 
-// ── Render static sections ──
-function renderFlow() {
-  const el = document.getElementById('flow');
-  FLOW.forEach((s, i) => {
-    const d = document.createElement('div');
-    d.className = 'flow-step';
-    d.innerHTML = `<div class="flow-step-label" style="color:${s.color}">${s.label}</div><div class="flow-step-sub">${s.sub}</div>`;
-    el.appendChild(d);
-    if (i < FLOW.length - 1) { const a = document.createElement('div'); a.className = 'flow-arrow'; a.textContent = '\u2192'; el.appendChild(a); }
-  });
+
+// ---- helpers ----
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const safeGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const safeSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const pad = n => String(n).padStart(2, '0');
+function ago(sec) {
+  if (sec == null || !isFinite(sec)) return 'unknown';
+  const d = Math.max(0, Math.floor(Date.now() / 1000 - sec));
+  if (d < 60) return d + 's ago';
+  if (d < 3600) return Math.floor(d / 60) + 'm ago';
+  if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+  return Math.floor(d / 86400) + 'd ago';
 }
-function renderSecurity() {
-  const el = document.getElementById('security');
-  SECURITY.forEach(s => {
-    const d = document.createElement('div');
-    d.className = 'sec-card';
-    d.innerHTML = `<div class="sec-dot" style="background:${s.color};box-shadow:0 0 8px ${s.color}66"></div><div><div class="sec-label">${s.label}</div><div class="sec-detail">${s.detail}</div></div>`;
-    el.appendChild(d);
-  });
+function dur(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+  return `${d}d ${pad(h)}:${pad(m)}:${pad(s)}`;
 }
-function renderStack() {
-  const el = document.getElementById('stack');
-  STACK.forEach(s => {
-    const d = document.createElement('span');
-    d.className = 'stack-pill';
-    d.innerHTML = `<span class="stack-cat">${s.c}</span>${s.n}`;
-    el.appendChild(d);
-  });
+function durShort(sec) {
+  const d = Math.floor(sec / 86400); if (d >= 1) return d + 'd';
+  const h = Math.floor(sec / 3600); if (h >= 1) return h + 'h';
+  return Math.floor(sec / 60) + 'm';
 }
- 
-// ── Dynamic rendering (from metrics.json) ──
-function barColor(v) { return v > 70 ? 'var(--red)' : v > 50 ? 'var(--yellow)' : 'var(--green)'; }
- 
-function renderNodes(nodes) {
-  const el = document.getElementById('nodes');
-  el.innerHTML = '';
-  nodes.forEach((n, i) => {
-    const srv = (NODE_ROLES[n.name] || '').includes('Server');
-    const role = NODE_ROLES[n.name] || 'Agent';
-    const ram = NODE_RAM[n.name] || (Math.round(n.memory_total_gb) + 'GB');
-    const cpuC = barColor(n.cpu), memC = barColor(n.memory);
-    const d = document.createElement('div');
-    d.className = `node${srv ? ' server' : ''}`;
-    d.style.animationDelay = `${i * 0.15}s`;
-    d.innerHTML = `
-      ${srv ? '<div class="node-glow"></div>' : ''}
-      <div class="node-head">
-        <div>
-          <div class="node-name"><span class="glow-dot green" style="width:8px;height:8px"></span>${n.name}</div>
-          <div class="node-role" style="color:${srv ? 'var(--green)' : 'var(--dim)'};font-weight:${srv ? 600 : 400}">${role}</div>
-        </div>
-        <div class="node-ram">${ram}</div>
-      </div>
-      <div class="node-metrics">
-        <div>
-          <div class="metric-head"><span class="metric-label">CPU</span><span class="metric-val" style="color:${cpuC}">${n.cpu}%</span></div>
-          <div class="bar"><div class="bar-fill" style="width:${n.cpu}%;background:linear-gradient(90deg,${cpuC}cc,${cpuC});box-shadow:0 0 8px ${cpuC}44"></div></div>
-        </div>
-        <div>
-          <div class="metric-head"><span class="metric-label">MEM</span><span class="metric-val" style="color:${memC}">${n.memory}%</span></div>
-          <div class="bar"><div class="bar-fill" style="width:${n.memory}%;background:linear-gradient(90deg,${memC}cc,${memC});box-shadow:0 0 8px ${memC}44"></div></div>
-        </div>
-      </div>
-      <div class="node-foot"><span>${NODE_ARCH[n.name] || ''}</span><span>${n.pods}/110 pods</span></div>`;
-    el.appendChild(d);
-  });
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtHour = t => `${MONTHS[t.getMonth()]} ${t.getDate()}, ${pad(t.getHours())}:${pad(t.getMinutes())}`;
+const level = v => v > 85 ? 'bad' : v > 70 ? 'warn' : '';
+function pctOf(series) {
+  if (!series) return null;
+  const v = series.filter(x => x != null);
+  return v.length ? (v.reduce((a, b) => a + b, 0) / v.length) * 100 : null;
 }
- 
-function renderServices(services) {
-  const el = document.getElementById('services');
-  el.innerHTML = '';
-  // Filter to interesting deployments (skip kube-system internals)
-  const skip = ['kube-prometheus-stack-kube-state-metrics',
-    'kube-prometheus-stack-operator',
-    'traefik',
-    'notification-controller',
-    'source-controller',
-    'kustomize-controller',
-    'helm-controller',
-    'local-path-provisioner',
-    'metrics-server',
-    'coredns',
-    'cluster-dashboard',
-    'longhorn-driver-deployer',
-    'csi-attacher',
-    'csi-provisioner',
-    'csi-resizer',
-    'csi-snapshotter',
-  ];
-  const filtered = services.filter(s => !skip.includes(s.name));
- 
-  filtered.forEach((s, i) => {
-    const meta = SVC_META[s.name] || {};
-    const name = meta.displayName || s.name;
-    const healthy = s.healthy;
-    const dotClass = healthy ? 'green' : 'red';
-    const hasUrl = meta.url != null;
-    const tag = s.url ? 'a' : 'div';
-    const d = document.createElement(hasUrl ? 'a' : 'div');
-    d.className = `svc${hasUrl ? ' clickable' : ''}`;
-    d.style.animationDelay = `${i * 0.08}s`;
-    if (hasUrl) { d.href = meta.url; d.target = '_blank'; d.rel = 'noopener'; }
-    const tags = (meta.tags || []).map(t => `<span class="svc-tag">${t}</span>`).join('');
-    d.innerHTML = `
-      <div class="svc-left">
-        <span class="glow-dot ${dotClass}" style="width:8px;height:8px"></span>
-        <div>
-          <div><span class="svc-name">${name}</span><span class="svc-ns">${s.namespace}</span></div>
-          <div class="svc-desc">${meta.desc || ''}</div>
-        </div>
-      </div>
-      <div class="svc-right">${tags}<span class="svc-pods">${s.available}/${s.desired}</span></div>`;
-    el.appendChild(d);
+const fmtPct = p => p == null ? 'n/a' : (p >= 99.995 ? '100%' : p.toFixed(2) + '%');
+const shortName = n => SHORT[n] || n;
+
+// ---- svg ----
+function spark(svg, vals) {
+  if (!svg) return;
+  const v = (vals || []).map(x => x == null ? null : +x);
+  const nums = v.filter(x => x != null);
+  if (nums.length < 2) { svg.innerHTML = ''; return; }
+  const w = 100, h = 26, n = v.length;
+  let min = Math.min(...nums), max = Math.max(...nums);
+  const padY = (max - min) * 0.15 || 1; min -= padY; max += padY;
+  const span = max - min;
+  let d = '';
+  v.forEach((x, i) => {
+    if (x == null) return;
+    const px = (i / (n - 1)) * w, py = h - ((x - min) / span) * h;
+    d += (d ? 'L' : 'M') + px.toFixed(2) + ' ' + py.toFixed(2);
   });
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML = `<path class="sp-area" d="${d} L${w} ${h} L0 ${h} Z"/><path class="sp-line" d="${d}"/>`;
 }
- 
-function updateStats(data) {
-  const nodes = data.nodes || [];
-  const avgCpu = nodes.length ? Math.round(nodes.reduce((a, n) => a + n.cpu, 0) / nodes.length) : 0;
-  const avgMem = nodes.length ? Math.round(nodes.reduce((a, n) => a + n.memory, 0) / nodes.length) : 0;
-  const healthySvcs = (data.services || []).filter(s => s.healthy).length;
- 
-  document.getElementById('statNodes').textContent = nodes.length;
-  document.getElementById('statPods').textContent = data.total_pods || 0;
-  document.getElementById('statCpu').textContent = avgCpu + '%';
-  document.getElementById('statMem').textContent = avgMem + '%';
-  document.getElementById('statSvcs').textContent = healthySvcs;
- 
-  // Check if all services healthy
-  const allHealthy = (data.services || []).every(s => s.healthy);
-  const dot = document.getElementById('statusDot');
-  const txt = document.getElementById('statusText');
-  if (allHealthy && nodes.length > 0) {
-    dot.className = 'glow-dot green'; dot.style.width = '10px'; dot.style.height = '10px';
-    txt.textContent = 'ALL SYSTEMS OPERATIONAL'; txt.style.color = 'var(--green)';
-  } else {
-    dot.className = 'glow-dot yellow'; dot.style.width = '10px'; dot.style.height = '10px';
-    txt.textContent = 'DEGRADED'; txt.style.color = 'var(--yellow)';
+function strip(svg, vals, end, step) {
+  if (!svg) return;
+  const n = vals.length, h = 10;
+  svg.setAttribute('viewBox', `0 0 ${n} ${h}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  let out = '';
+  for (let i = 0; i < n; i++) {
+    const v = vals[i];
+    const cls = v == null ? 'c-na' : v >= 0.999 ? 'c-ok' : v >= 0.5 ? 'c-warn' : 'c-bad';
+    const t = new Date((end - (n - 1 - i) * step) * 1000);
+    const txt = v == null ? 'no data' : (v * 100).toFixed(1) + '% up';
+    out += `<rect class="${cls}" x="${i + 0.15}" y="0" width="0.7" height="${h}"><title>hour ending ${fmtHour(t)}: ${txt}</title></rect>`;
+  }
+  svg.innerHTML = out;
+}
+const emptyStrip = n => Array.from({ length: n }, () => null);
+
+// ---- theme ----
+function applyTheme(t) {
+  document.documentElement.dataset.theme = (t === 'light' || t === 'dark') ? t : '';
+  document.querySelectorAll('#themeSeg button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+}
+const urlTheme = new URLSearchParams(location.search).get('theme');
+applyTheme(urlTheme || safeGet('theme') || 'auto');
+$('themeSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  safeSet('theme', b.dataset.t); applyTheme(b.dataset.t);
+});
+
+// ---- static sections ----
+$('flow').innerHTML = FLOW.map(s => `<div class="step"><small>${s.n}</small><b>${esc(s.label)}</b><span>${esc(s.sub)}</span></div>`).join('');
+$('stack').innerHTML = STACK.map(([c, n]) => `<span class="pill"><small>${esc(c)}</small>${esc(n)}</span>`).join('');
+$('version').textContent = VERSION;
+
+// ---- state ----
+let M = null, H = null, uptimeBase = null, uptimeAt = 0, failures = 0;
+
+// ---- derived ----
+function buildGroups() {
+  if (!M) return [];
+  const byNs = new Map();
+  for (const w of M.workloads || []) {
+    if (HIDE_NS.has(w.namespace) || HIDE_WL.test(w.name)) continue;
+    if (!byNs.has(w.namespace)) byNs.set(w.namespace, []);
+    byNs.get(w.namespace).push(w);
+  }
+  const week = H && H.week;
+  const groups = [...byNs.entries()].map(([ns, parts]) => {
+    const meta = GROUPS[ns] || { title: ns, desc: '', order: 20 };
+    const down = parts.some(p => p.desired > 0 && p.available === 0);
+    const degraded = !down && parts.some(p => !p.healthy);
+    let series = null;
+    if (week) {
+      const arrs = parts.map(p => week.workloads[`${p.namespace}/${p.name}`]).filter(Boolean);
+      if (arrs.length) series = Array.from({ length: week.n }, (_, i) => {
+        let m = null;
+        for (const a of arrs) { const v = a[i]; if (v == null) continue; m = m == null ? v : Math.min(m, v); }
+        return m;
+      });
+    }
+    return { ns, meta, parts, state: down ? 'bad' : degraded ? 'warn' : 'ok', series, pct: pctOf(series) };
+  });
+  groups.sort((a, b) => a.meta.order - b.meta.order || a.ns.localeCompare(b.ns));
+  return groups;
+}
+const wl = (ns, name) => (M && M.workloads || []).find(w => w.namespace === ns && w.name === name);
+
+// ---- render ----
+function renderStatus(groups) {
+  const dot = $('statusDot'), txt = $('statusText');
+  let state = 'dim', text = 'Connecting';
+  if (M) {
+    const ageSec = (Date.now() - Date.parse(M.timestamp)) / 1000;
+    const nodesDown = (M.nodes || []).filter(n => !n.ready).length;
+    const down = groups.filter(g => g.state === 'bad').length;
+    const degraded = groups.filter(g => g.state === 'warn').length;
+    if (ageSec > STALE_AFTER) { state = 'warn'; text = 'Data stale'; }
+    else if (nodesDown) { state = 'bad'; text = `${nodesDown} node${nodesDown > 1 ? 's' : ''} not ready`; }
+    else if (down) { state = 'bad'; text = `${down} service${down > 1 ? 's' : ''} down`; }
+    else if (degraded) { state = 'warn'; text = `${degraded} service${degraded > 1 ? 's' : ''} degraded`; }
+    else { state = 'ok'; text = 'All systems operational'; }
+  } else if (failures > 1) { state = 'bad'; text = 'Collector unreachable'; }
+  dot.className = 'dot ' + (state === 'dim' ? '' : state);
+  txt.className = state; txt.textContent = text;
+}
+
+function renderTiles(groups) {
+  if (!M) return;
+  const nodes = M.nodes || [];
+  const ready = nodes.filter(n => n.ready).length;
+  $('tNodes').textContent = `${ready}/${nodes.length}`;
+  $('tNodes').className = 't-v ' + (ready === nodes.length ? '' : 'bad');
+  $('tNodesSub').textContent = nodes.length ? `${nodes.filter(n => n.arch === 'arm64').length} arm64, ${nodes.filter(n => n.arch === 'amd64').length} amd64` : 'ready';
+  $('tPods').textContent = M.pods_running ?? '-';
+  $('tPodsSub').textContent = `running of ${M.pods_total ?? '-'}`;
+  const cpu = nodes.length ? nodes.reduce((a, n) => a + n.cpu, 0) / nodes.length : null;
+  const memUsed = nodes.reduce((a, n) => a + n.memory * n.memory_total_gb / 100, 0), memTot = nodes.reduce((a, n) => a + n.memory_total_gb, 0);
+  const mem = memTot ? memUsed / memTot * 100 : null;
+  $('tCpu').textContent = cpu == null ? '-' : Math.round(cpu) + '%';
+  $('tMem').textContent = mem == null ? '-' : Math.round(mem) + '%';
+  $('tMemSub').textContent = memTot ? `${memUsed.toFixed(1)} of ${memTot.toFixed(1)} GB` : 'cluster used';
+  const pcts = groups.map(g => g.pct).filter(p => p != null);
+  const avail = pcts.length ? pcts.reduce((a, b) => a + b, 0) / pcts.length : null;
+  $('tAvail').textContent = fmtPct(avail);
+  $('tAvail').className = 't-v ' + (avail == null ? 'dim' : avail >= 99.9 ? '' : avail >= 99 ? 'warn' : 'bad');
+  $('tAvailSub').textContent = pcts.length ? `7 days, ${pcts.length} services` : '7 days';
+  if (H) {
+    $('tRestarts').textContent = H.restarts_24h ?? '-';
+    $('tRestarts').className = 't-v ' + ((H.restarts_24h || 0) > 20 ? 'warn' : '');
+    const top = (H.restarts_top || [])[0];
+    $('tRestartsSub').textContent = top ? `${top.namespace}: ${top.count}` : 'last 24 hours';
+    spark($('sCpu'), H.day.cluster.cpu);
+    spark($('sMem'), H.day.cluster.mem);
+    spark($('sPods'), H.day.cluster.pods);
+    $('tCpuSub').textContent = '24h, cluster average';
   }
 }
- 
-function updateUptime(nodes) {
-  if (!nodes || !nodes.length) return;
-  // Use the longest uptime (control plane node)
-  const maxUp = Math.max(...nodes.map(n => n.uptime_seconds || 0));
-  if (maxUp <= 0) return;
-  const d = Math.floor(maxUp / 86400);
-  const h = String(Math.floor((maxUp % 86400) / 3600)).padStart(2, '0');
-  const m = String(Math.floor((maxUp % 3600) / 60)).padStart(2, '0');
-  const s = String(Math.floor(maxUp % 60)).padStart(2, '0');
-  document.getElementById('uptime').textContent = `${d}d ${h}h ${m}m ${s}s`;
+
+function renderNodes() {
+  const el = $('nodes'); if (!M) return;
+  const nodes = M.nodes || [];
+  $('nodesMeta').textContent = nodes.length ? `${nodes.reduce((a, n) => a + n.cores, 0)} cores, ${nodes.reduce((a, n) => a + n.memory_total_gb, 0).toFixed(0)} GB` : '';
+  el.innerHTML = nodes.map(n => {
+    const role = n.control_plane ? 'control plane' : 'worker';
+    const ram = Math.round(n.memory_total_gb) + ' GB';
+    const state = !n.ready ? 'bad' : n.pressure > 0 ? 'warn' : 'ok';
+    const foot = [
+      n.temp_c != null ? `<span><b>${n.temp_c.toFixed(0)}°C</b></span>` : '',
+      n.disk_root_pct != null ? `<span>disk <b class="${level(n.disk_root_pct)}">${n.disk_root_pct.toFixed(0)}%</b></span>` : '',
+      `<span><b>${n.pods}</b> pods</span>`,
+      `<span>up <b>${durShort(n.uptime_seconds)}</b></span>`,
+      `<span>${esc(n.kubelet)}</span>`,
+    ].join('');
+    return `<div class="card node" data-node="${esc(n.name)}">
+      <div class="n-head">
+        <div>
+          <div class="n-name"><span class="dot ${state}"></span>${esc(n.name)}<span class="tag">${role}</span></div>
+          <div class="n-meta">${esc(n.arch)} · ${esc(n.os)} · ${n.cores} cores · ${ram}</div>
+        </div>
+      </div>
+      <div class="n-metrics">
+        <div><div class="m-h"><span>CPU</span><b class="${level(n.cpu)}">${n.cpu.toFixed(0)}%</b></div><div class="bar ${level(n.cpu)}"><i style="width:${Math.min(100, n.cpu)}%"></i></div><svg class="spark n-spark" data-s="cpu" aria-hidden="true"></svg></div>
+        <div><div class="m-h"><span>Memory</span><b class="${level(n.memory)}">${n.memory.toFixed(0)}%</b></div><div class="bar ${level(n.memory)}"><i style="width:${Math.min(100, n.memory)}%"></i></div><svg class="spark n-spark" data-s="mem" aria-hidden="true"></svg></div>
+      </div>
+      <div class="n-foot">${foot}</div>
+      <svg class="strip n-strip" aria-label="7 day availability"></svg>
+    </div>`;
+  }).join('');
+  for (const n of nodes) {
+    const card = el.querySelector(`[data-node="${CSS.escape(n.name)}"]`);
+    const hist = H && H.day.nodes[n.name];
+    if (hist) { spark(card.querySelector('[data-s="cpu"]'), hist.cpu); spark(card.querySelector('[data-s="mem"]'), hist.mem); }
+    const week = H && H.week;
+    strip(card.querySelector('.n-strip'), week && week.nodes[n.name] ? week.nodes[n.name] : emptyStrip(168), week ? week.end : Date.now() / 1000, 3600);
+  }
 }
- 
-// ── Fetch metrics ──
-let metricsOk = false;
+
+function renderServices(groups) {
+  const el = $('services');
+  if (!groups.length) { el.innerHTML = '<div class="card empty">No workload data yet.</div>'; return; }
+  const week = H && H.week;
+  el.innerHTML = groups.map(g => {
+    const chips = g.parts.map(p => {
+      const c = p.healthy ? '' : (p.available === 0 ? 'bad' : 'warn');
+      return `<span class="chip ${c}">${esc(shortName(p.name))} ${p.available}/${p.desired}</span>`;
+    }).join('');
+    const pctCls = g.pct == null ? 'dim' : g.pct >= 99.9 ? '' : g.pct >= 99 ? 'warn' : 'bad';
+    return `<div class="card svc" data-ns="${esc(g.ns)}">
+      <div class="s-row">
+        <div class="s-main"><span class="dot ${g.state}"></span><div><div><span class="s-name">${esc(g.meta.title)}</span><span class="s-ns">${esc(g.ns)}</span></div>${g.meta.desc ? `<div class="s-desc">${esc(g.meta.desc)}</div>` : ''}</div></div>
+        <div class="s-parts">${chips}</div>
+        <div class="s-pct ${pctCls}">${fmtPct(g.pct)}</div>
+      </div>
+      <div class="s-strip"><span>7d</span><svg class="strip" aria-label="hourly availability, 7 days"></svg><span>now</span></div>
+    </div>`;
+  }).join('');
+  for (const g of groups) {
+    const svg = el.querySelector(`[data-ns="${CSS.escape(g.ns)}"] .strip`);
+    strip(svg, g.series || emptyStrip(week ? week.n : 168), week ? week.end : Date.now() / 1000, week ? week.step : 3600);
+  }
+}
+
+function renderPlatform() {
+  const el = $('platform'); if (!M) return;
+  const rows = [];
+  const row = (k, v, cls = '', small = '') => rows.push(`<div class="prow"><span class="k">${k}</span><span class="v ${cls}">${v}${small ? `<small>${small}</small>` : ''}</span></div>`);
+  const tOk = M.targets_up === M.targets_total;
+  row('Scrape targets', `${M.targets_up} / ${M.targets_total}`, tOk ? '' : 'warn', tOk ? 'all up' : 'down');
+  const ds = (M.workloads || []).filter(w => w.kind === 'daemonset' && !HIDE_WL.test(w.name));
+  const dsBad = ds.filter(w => !w.healthy);
+  row('DaemonSets', `${ds.length - dsBad.length} / ${ds.length}`, dsBad.length ? 'bad' : '', dsBad.length ? esc(dsBad.map(w => `${w.name} ${w.available}/${w.desired}`).join(', ')) : 'ready on every node');
+  const pressure = (M.nodes || []).reduce((a, n) => a + (n.pressure || 0), 0);
+  row('Node pressure', pressure ? `${pressure}` : 'none', pressure ? 'warn' : '', pressure ? 'memory, disk or pid' : '');
+  const kubelets = [...new Set((M.nodes || []).map(n => n.kubelet).filter(Boolean))].sort();
+  row('Kubelet', kubelets.length > 1 ? 'mixed' : esc(kubelets[0] || '-'), kubelets.length > 1 ? 'warn' : '', kubelets.length > 1 ? esc(kubelets.join(', ')) : 'k3s');
+  if (H) {
+    const pvOk = H.pv.bound === H.pv.total;
+    row('Persistent volumes', `${H.pv.bound} / ${H.pv.total}`, pvOk ? '' : 'warn', 'bound');
+    if (H.longhorn) {
+      const lh = H.longhorn, bad = lh.degraded + lh.faulted;
+      row('Longhorn volumes', `${lh.healthy} / ${lh.total}`, bad ? (lh.faulted ? 'bad' : 'warn') : '', bad ? `${lh.degraded} degraded, ${lh.faulted} faulted` : 'healthy');
+    } else {
+      row('Longhorn volumes', 'n/a', 'dim', 'metrics not scraped');
+    }
+    row('Renovate', H.renovate_last_success ? ago(H.renovate_last_success) : 'no run', H.renovate_last_success && (Date.now() / 1000 - H.renovate_last_success) > 2 * 86400 ? 'warn' : '', 'last successful run');
+    const top = H.restarts_top || [];
+    row('Restarts 24h', `${H.restarts_24h}`, H.restarts_24h > 20 ? 'warn' : '', top.length ? esc(top.map(t => `${t.pod} ${t.count}`).join(', ')) : 'none');
+  }
+  el.innerHTML = rows.join('');
+  $('platMeta').textContent = H ? `history ${ago(Date.parse(H.timestamp) / 1000)}` : '';
+}
+
+function renderSecurity() {
+  const el = $('security');
+  const cards = [];
+  const card = (title, text, live = '', state = null) => cards.push(
+    `<div class="card sc"><div class="sc-h"><b>${title}</b>${state ? `<span class="dot ${state}"></span>` : ''}</div><p>${text}</p>${live ? `<div class="live">${live}</div>` : ''}</div>`);
+
+  card('Zero trust ingress', 'Cloudflare Tunnels and Access in front of every app. No inbound ports on the LAN.');
+  card('Encrypted secrets', 'SOPS with age. Only Flux holds the key and decrypts in cluster.');
+  card('GitOps only', 'Flux applies main. No manual kubectl. Every change has a commit and a reviewer.');
+
+  // PR security review, live from the Actions API.
+  const ci = H && H.ci;
+  let live = '<span class="dim">no run data</span>', state = null;
+  if (ci) {
+    const ok = ci.conclusion === 'success';
+    state = ok ? 'ok' : 'bad';
+    const jobs = (ci.jobs || []).map(j => `<span class="chip ${j.conclusion === 'success' ? '' : 'bad'}">${esc(j.name)}</span>`).join('');
+    live = `<a href="${esc(ci.html_url)}" target="_blank" rel="noopener">run ${esc(ci.run_number)}</a><span class="${ok ? 'ok' : 'bad'}">${esc(ci.conclusion)}</span><span>${ago(Date.parse(ci.updated_at) / 1000)}</span>${jobs}`;
+  }
+  card('PR security review', 'Every pull request runs Claude Code Security Review, a plaintext credential scan and a kustomize build. Merge waits on green.', live, state);
+
+  const falco = wl('falco', 'falco');
+  card('Runtime detection', 'Falco on every node watches syscalls for container escapes and shells.',
+    falco ? `<span class="${falco.healthy ? 'ok' : 'bad'}">${falco.available}/${falco.desired} nodes</span>` : '<span class="dim">no data</span>',
+    falco ? (falco.healthy ? 'ok' : 'bad') : null);
+
+  const velero = wl('velero', 'velero'), agent = wl('velero', 'node-agent');
+  const bOk = velero && velero.healthy && (!agent || agent.healthy);
+  card('Backups', 'Velero to off cluster MinIO. Pod volume data included.',
+    velero ? `<span class="${bOk ? 'ok' : 'warn'}">velero ${velero.available}/${velero.desired}</span>${agent ? `<span class="${agent.healthy ? 'ok' : 'warn'}">node-agent ${agent.available}/${agent.desired}</span>` : ''}` : '<span class="dim">no data</span>',
+    velero ? (bOk ? 'ok' : 'warn') : null);
+
+  card('Namespace isolation', 'One namespace and one tunnel per app, each with its own credentials.');
+  card('Automated patching', 'Renovate opens pinned image and chart bumps. Nothing runs on latest.',
+    H && H.renovate_last_success ? `<span>last run ${ago(H.renovate_last_success)}</span>` : '');
+  card('Pod hardening', 'Non root, dropped privilege escalation, resource limits, read only mounts where the app allows.');
+  el.innerHTML = cards.join('');
+}
+
+function renderAll() {
+  const groups = buildGroups();
+  renderStatus(groups);
+  renderTiles(groups);
+  renderNodes();
+  renderServices(groups);
+  renderPlatform();
+  renderSecurity();
+}
+
+// ---- uptime and age tickers ----
+function tick() {
+  if (uptimeBase != null) $('uptime').textContent = dur(uptimeBase + (Date.now() - uptimeAt) / 1000);
+}
+function ageTick() {
+  if (!M) return;
+  const s = Math.floor((Date.now() - Date.parse(M.timestamp)) / 1000);
+  $('dataAge').textContent = s > STALE_AFTER ? `data ${ago(Date.parse(M.timestamp) / 1000)}` : '';
+  if (s > STALE_AFTER) renderStatus(buildGroups());
+}
+
+// ---- fetch ----
+async function getJSON(path) {
+  const res = await fetch(`${path}?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${path} ${res.status}`);
+  return res.json();
+}
 async function fetchMetrics() {
   try {
-    const res = await fetch('/api/metrics.json?t=' + Date.now());
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
- 
-    renderNodes(data.nodes || []);
-    renderServices(data.services || []);
-    updateStats(data);
-    updateUptime(data.nodes);
- 
-    // Update status
-    metricsOk = true;
-    const api = document.getElementById('apiStatus');
-    api.className = 'api-status live';
-    api.innerHTML = '<span class="glow-dot green" style="width:6px;height:6px"></span><span>LIVE</span>';
-    document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    M = await getJSON('/api/metrics.json');
+    failures = 0;
+    const cp = (M.nodes || []).find(n => n.control_plane) || (M.nodes || [])[0];
+    if (cp) { uptimeBase = cp.uptime_seconds; uptimeAt = Date.now(); tick(); }
+    const t = new Date();
+    $('lastUpdate').textContent = `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`;
+    renderAll();
   } catch (e) {
-    console.warn('[dashboard] metrics fetch failed:', e.message);
-    if (!metricsOk) {
-      const api = document.getElementById('apiStatus');
-      api.className = 'api-status offline';
-      api.innerHTML = '<span class="glow-dot red" style="width:6px;height:6px"></span><span>CONNECTING...</span>';
-    }
+    failures++;
+    console.warn('[status] metrics fetch failed:', e.message);
+    renderStatus(buildGroups());
   }
 }
- 
-// ── Uptime ticker (between fetches) ──
-let tickInterval;
-function startUptimeTick() {
-  const el = document.getElementById('uptime');
-  tickInterval = setInterval(() => {
-    const text = el.textContent;
-    const match = text.match(/(\d+)d (\d+)h (\d+)m (\d+)s/);
-    if (!match) return;
-    let total = parseInt(match[1]) * 86400 + parseInt(match[2]) * 3600 + parseInt(match[3]) * 60 + parseInt(match[4]) + 1;
-    const d = Math.floor(total / 86400);
-    const h = String(Math.floor((total % 86400) / 3600)).padStart(2, '0');
-    const m = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
-    const s = String(total % 60).padStart(2, '0');
-    el.textContent = `${d}d ${h}h ${m}m ${s}s`;
-  }, 1000);
+async function fetchHistory() {
+  try { H = await getJSON('/api/history.json'); renderAll(); }
+  catch (e) { console.warn('[status] history fetch failed:', e.message); }
 }
- 
-// ── Init ──
-renderFlow();
+
 renderSecurity();
-renderStack();
-setTimeout(() => document.querySelectorAll('.fade-up').forEach(el => el.classList.add('visible')), 100);
- 
-// First fetch, then every 30s
-fetchMetrics();
-setInterval(fetchMetrics, 30000);
-startUptimeTick();
+fetchMetrics().then(fetchHistory);
+setInterval(fetchMetrics, METRICS_EVERY);
+setInterval(fetchHistory, HISTORY_EVERY);
+setInterval(tick, 1000);
+setInterval(ageTick, 5000);
 </script>
 </body>
 </html>
