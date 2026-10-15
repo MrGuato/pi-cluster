@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: pgautoupgrade/pgautoupgrade:18-alpine@sha256:83f833b409c9a8a205f4159adfa8ef8346705e12e0aab0d213fc88f10c9a8cab   # one-time 16->18 upgrade image (multi-arch)
+          image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873   # Official image, has linux/arm64 layer for RP4
           args:
             - postgres
             - -c
@@ -38,6 +38,11 @@ spec:
             limits:
               cpu: 300m
               memory: 384Mi   # Hard cap — protects your other workloads on the RP4
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "vikunja"]
+            initialDelaySeconds: 30   # Give postgres time to start before checking
+            periodSeconds: 15
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "vikunja"]
