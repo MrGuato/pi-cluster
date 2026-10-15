@@ -32,7 +32,10 @@ jobs:
           persist-credentials: false
       - name: Build every Flux path
         run: |
-          for p in apps/staging apps/staging/falco infrastructure/controllers/staging monitoring/controllers/staging monitoring/configs/staging; do
+          # apps/staging has no kustomization.yaml (Flux generates one), so build each app overlay.
+          paths="infrastructure/controllers/staging monitoring/controllers/staging monitoring/configs/staging"
+          for d in apps/staging/*/; do paths="$paths ${d%/}"; done
+          for p in $paths; do
             kubectl kustomize "$p" > /dev/null || { echo "::error::kustomize build failed in $p"; exit 1; }
           done
           echo "All Flux paths build." >> "$GITHUB_STEP_SUMMARY"
@@ -53,4 +56,5 @@ jobs:
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
       - name: Show result
         if: always()
-        run: echo "Claude findings: ${{ steps.review.outputs.findings-count || 'none reported' }}" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Claude findings: ${{ steps.review.outputs.findings-count || 'none reported' }}" >> "$GITHUB_STEP_SUMMARY"
