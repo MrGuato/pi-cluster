@@ -1,18 +1,56 @@
 name: Security Review
-permissions:
-  pull-requests: write
-  contents: read
 on:
   pull_request:
+permissions:
+  contents: read
+  pull-requests: write
 jobs:
-  security:
+  plaintext-credentials:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Fail on plaintext credentials in YAML
+        run: |
+          hits=$(grep -rnEi --include='*.yaml' --include='*.yml' \
+            '^[[:space:]]*-?[[:space:]]*[A-Za-z0-9_.-]*(password|passwd|secret|token|apikey|api_key)[A-Za-z0-9_.-]*:[[:space:]]*[^[:space:]#]' . \
+            | grep -vE 'ENC\[|:[[:space:]]*(true|false|null|\{\}|\[\]|"")[[:space:]]*$|secretName:|secretKeyRef|existingSecret|SecretKey:|userKey:|passwordKey:|passwordMode:|tokenKey:|secretRef|tokenRef|Secret:[[:space:]]*[a-z0-9-]+$|/var/run/secrets|description:' \
+            | grep -v 'flux-system/gotk-components.yaml' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits" | sed -E 's/:[^:]*$/: <value hidden>/'
+            echo "::error::Credential-looking key with a literal value. Move it into a SOPS-encrypted Secret."
+            exit 1
+          fi
+          echo "No plaintext credentials found." >> "$GITHUB_STEP_SUMMARY"
+
+  kustomize-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Build every Flux path
+        run: |
+          for p in apps/staging apps/staging/falco infrastructure/controllers/staging monitoring/controllers/staging monitoring/configs/staging; do
+            kubectl kustomize "$p" > /dev/null || { echo "::error::kustomize build failed in $p"; exit 1; }
+          done
+          echo "All Flux paths build." >> "$GITHUB_STEP_SUMMARY"
+
+  claude-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 2
-      - uses: anthropics/claude-code-security-review@main
+      - id: review
+        uses: anthropics/claude-code-security-review@0c6a49f1fa56a1d472575da86a94dbc1edb78eda # main as of 2026-02-11
         with:
           comment-pr: true
+          run-every-commit: true
+          custom-security-scan-instructions: .github/security-review-instructions.txt
           claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+      - name: Show result
+        if: always()
+        run: echo "Claude findings: ${{ steps.review.outputs.findings-count || 'none reported' }}" >> "$GITHUB_STEP_SUMMARY"
