@@ -25,6 +25,9 @@ spec:
       # Schedule replicas only on nodes with storage label
       storageMinimalAvailablePercentage: 15
       defaultLonghornStaticStorageClass: longhorn-static
+      # Let Longhorn upgrade volume engines to the default engine image automatically
+      # (live upgrade for attached healthy volumes), one volume per node at a time.
+      concurrentAutomaticEngineUpgradePerNodeLimit: 1
 
     persistence:
       defaultClassReplicaCount: 2
