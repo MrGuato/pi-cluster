@@ -1,0 +1,14 @@
+---
+# pisentry needs hostPID and a read-only hostPath of / to see the node, which
+# the "baseline" and "restricted" Pod Security levels forbid. The namespace is
+# labeled privileged so admission is explicit, but the pod itself is NOT
+# privileged: it runs with three capabilities and a read-only root filesystem.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pisentry
+  labels:
+    app.kubernetes.io/name: pisentry
+    app.kubernetes.io/part-of: security
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged

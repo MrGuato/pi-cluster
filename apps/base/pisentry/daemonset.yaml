@@ -1,0 +1,143 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pisentry
+  namespace: pisentry
+  labels:
+    app.kubernetes.io/name: pisentry
+    app.kubernetes.io/part-of: security
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pisentry
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pisentry
+        app.kubernetes.io/part-of: security
+    spec:
+      # pisentry never talks to the Kubernetes API, so it gets no token.
+      automountServiceAccountToken: false
+      # A security agent should run on every node, tainted or not.
+      tolerations:
+        - operator: Exists
+      # hostPID: /proc shows every host process, so the miner and reverse
+      # shell detectors see pods AND bare host processes.
+      # No hostNetwork: listeners are read from /proc/1/net (host netns).
+      hostPID: true
+      enableServiceLinks: false
+      containers:
+        - name: pisentry
+          # Multi-arch: arm64 (Pi 4), arm/v7, amd64 (kubethink).
+          image: ghcr.io/mrguato/pisentry:v0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["run", "-config", "/etc/pisentry/config.json"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # Alerts stay off until the SOPS secret in the staging overlay exists.
+            - name: PISENTRY_ALERT_TYPE
+              valueFrom:
+                secretKeyRef:
+                  name: pisentry-alerts
+                  key: alert-type
+                  optional: true
+            - name: PISENTRY_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pisentry-alerts
+                  key: webhook-url
+                  optional: true
+            - name: PISENTRY_WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pisentry-alerts
+                  key: webhook-token
+                  optional: true
+          ports:
+            - name: metrics
+              containerPort: 9817
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 24Mi
+            limits:
+              cpu: 200m
+              memory: 96Mi
+          securityContext:
+            # Be honest about the blast radius: hostPID + SYS_PTRACE + an
+            # unconfined LSM profile means a compromised pisentry is effectively
+            # root on the node. Every host security agent (Falco, Wazuh,
+            # Tetragon) has this property. pisentry keeps it as small as it can:
+            # no privileged flag, no API token, read-only root filesystem,
+            # stdlib-only Go, and all attacker-controlled strings sanitized.
+            # Root, but only with the three capabilities it needs:
+            #   DAC_READ_SEARCH  read /etc/shadow, journals, other users' homes
+            #   SYS_PTRACE       readlink /proc/<pid>/fd and /proc/<pid>/exe of
+            #                    processes owned by other users
+            #   SYS_CHROOT       run the host's own journalctl (journal_chroot)
+            runAsUser: 0
+            runAsNonRoot: false
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["DAC_READ_SEARCH", "SYS_PTRACE", "SYS_CHROOT"]
+            seccompProfile:
+              type: RuntimeDefault
+            # Ubuntu/RHEL nodes: the default AppArmor profile blocks ptrace
+            # reads of host processes, and container_t cannot read host files
+            # under SELinux enforcing (kubethink, RHEL 10). Both are ignored on
+            # nodes where the LSM is not active (stock Raspberry Pi OS).
+            appArmorProfile:
+              type: Unconfined
+            seLinuxOptions:
+              type: spc_t
+          volumeMounts:
+            - name: config
+              mountPath: /etc/pisentry
+              readOnly: true
+            - name: host-root
+              mountPath: /host
+              readOnly: true
+              # readOnly alone is NOT recursive: submounts like /host/run (the
+              # containerd socket lives there) and /host/boot/firmware would stay
+              # writable. IfPossible makes every submount read-only on k8s 1.30+
+              # with containerd 2.x and silently falls back on older stacks.
+              # It requires mountPropagation None.
+              recursiveReadOnly: IfPossible
+              mountPropagation: None
+            - name: state
+              mountPath: /var/lib/pisentry
+      volumes:
+        - name: config
+          configMap:
+            name: pisentry-config
+        # Entire host filesystem, read-only. FIM, the posture audit and the
+        # chrooted journalctl all read through this.
+        - name: host-root
+          hostPath:
+            path: /
+            type: Directory
+        # Baselines and Top 10 history survive pod restarts. This is per-node
+        # state by design, so node-bound hostPath is correct here (unlike the
+        # local-path PVC lesson for app data).
+        - name: state
+          hostPath:
+            path: /var/lib/pisentry
+            type: DirectoryOrCreate

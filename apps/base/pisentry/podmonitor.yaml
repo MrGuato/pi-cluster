@@ -1,0 +1,23 @@
+---
+# kube-prometheus-stack only picks up PodMonitors carrying its release label
+# (podMonitorSelectorNilUsesHelmValues defaults to true). Adjust "release" if
+# your HelmRelease is named differently.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: pisentry
+  namespace: pisentry
+  labels:
+    app.kubernetes.io/name: pisentry
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pisentry
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+      relabelings:
+        # Adds node="kubepi" etc. so the dashboard can filter per node.
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
