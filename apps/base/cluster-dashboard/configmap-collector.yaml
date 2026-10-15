@@ -6,7 +6,8 @@ data:
   collect.sh: |
     #!/bin/sh
     # Status dashboard collector.
-    # Fast loop (30s): metrics.json  - nodes, workloads, pods, scrape targets.
+    # Fast loop (30s): metrics.json  - nodes, workloads, pods, scrape targets,
+    #                                  host security coverage (pisentry).
     # Slow loop (5m):  history.json  - 7d hourly availability, 24h sparklines,
     #                                  restarts, volumes, Renovate, Longhorn, CI.
     # Prometheus is the only data source, plus one unauthenticated read of the
@@ -55,6 +56,13 @@ data:
       q 'kube_daemonset_status_desired_number_scheduled'                                > $T/ds_desired.json
       q 'sum(up)'                                                                       > $T/up_sum.json
       q 'count(up)'                                                                     > $T/up_count.json
+      # pisentry host agents. Coverage only: every query aggregates away node,
+      # category, check and severity labels before anything reaches the page.
+      q 'count(pisentry_up)'                                                               > $T/ps_present.json
+      q 'count(pisentry_up == 1)'                                                          > $T/ps_up.json
+      q 'max(time() - pisentry_detector_last_run_timestamp_seconds)'                       > $T/ps_det_age.json
+      q 'sum(increase(pisentry_events_total{severity=~"critical|high"}[24h]))'             > $T/ps_events.json
+      q 'sum(pisentry_audit_check_failing{severity=~"critical|high"})'                     > $T/ps_posture.json
 
       jq -c -n -f "$SCRIPTS/fast.jq" --arg ts "$(now_iso)" --argjson now_ts "$(date -u +%s)" \
         --slurpfile nodes $T/nodes.json --slurpfile node_info $T/node_info.json --slurpfile node_role $T/node_role.json \
@@ -66,6 +74,8 @@ data:
         --slurpfile sr $T/sts_ready.json --slurpfile sd $T/sts_desired.json \
         --slurpfile dr $T/ds_ready.json --slurpfile dsd $T/ds_desired.json \
         --slurpfile up_sum $T/up_sum.json --slurpfile up_count $T/up_count.json \
+        --slurpfile ps_present $T/ps_present.json --slurpfile ps_up $T/ps_up.json --slurpfile ps_det_age $T/ps_det_age.json \
+        --slurpfile ps_events $T/ps_events.json --slurpfile ps_posture $T/ps_posture.json \
         > "$OUT_DIR/metrics.json.tmp" 2>$T/fast.err && mv "$OUT_DIR/metrics.json.tmp" "$OUT_DIR/metrics.json" \
         || echo "[collector] fast: jq failed: $(head -c 300 $T/fast.err)"
     }
@@ -147,6 +157,7 @@ data:
     def val: .value[1] | tonumber;
     def r1: (. * 10 | round) / 10;
     def res($x): $x[0].data.result;
+    def scalar($x): (res($x)[0].value[1] // null | if . == null then null else tonumber end);
     def by_inst($x; $i): [ res($x)[] | select(.metric.instance == $i) | val ] | first;
     def by_node($x; $n): [ res($x)[] | select(.metric.node == $n) | val ] | first;
     def lookup($x; $label): (res($x) | map({ key: (.metric.namespace + "/" + .metric[$label]), value: val }) | from_entries);
@@ -183,6 +194,15 @@ data:
       pods_total:   (res($pods_total)[0].value[1]   // "0" | tonumber),
       targets_up:   (res($up_sum)[0].value[1]       // "0" | tonumber),
       targets_total:(res($up_count)[0].value[1]     // "0" | tonumber),
+      # Host security coverage. null means not deployed: no pisentry series and no
+      # pisentry DaemonSet, so the page says so instead of showing 0/N.
+      pisentry: (
+        ([ res($dsd)[] | select(.metric.namespace == "pisentry" and .metric.daemonset == "pisentry") ] | length > 0) as $ds
+        | if scalar($ps_present) == null and ($ds | not) then null else
+          { agents_up: (scalar($ps_up) // 0),
+            nodes: ([ (res($node_info) | length), (res($nodes) | length) ] | max),
+            detector_max_age_s: (scalar($ps_det_age) | if . == null then null else round end),
+            attention: (((scalar($ps_events) // 0) > 0) or ((scalar($ps_posture) // 0) > 0)) } end),
       workloads: ((workloads($da; $dd; "deployment"; "deployment")
                  + workloads($sr; $sd; "statefulset"; "statefulset")
                  + workloads($dr; $dsd; "daemonset"; "daemonset")) | sort_by(.namespace, .name))

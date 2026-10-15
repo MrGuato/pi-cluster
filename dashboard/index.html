@@ -120,6 +120,9 @@ section{margin-bottom:32px}
 .prow .v small{font-weight:400;color:var(--text-3);margin-left:6px}
 
 .sec{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.sec-live{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sec-sub{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);margin-bottom:8px}
+.sec+.sec-sub{margin-top:18px}
 .sc{padding:14px 16px}
 .sc-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px}
 .sc-h b{font-size:13px;font-weight:600}
@@ -207,6 +210,9 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
 
   <section>
     <div class="sec-h"><h2>Security</h2><span class="meta">posture and gates</span></div>
+    <div class="sec-sub">monitored</div>
+    <div class="sec sec-live" id="securityLive"></div>
+    <div class="sec-sub">by design</div>
     <div class="sec" id="security"></div>
   </section>
 
@@ -230,8 +236,9 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
 
 <script>
 'use strict';
-const VERSION = 'v5.0.0';
+const VERSION = 'v5.1.0';
 const METRICS_EVERY = 30000, HISTORY_EVERY = 300000, STALE_AFTER = 150;
+const PISENTRY_STALE = 12 * 3600; // slowest pisentry detectors run every 6h
 
 // Namespace to display mapping. Unknown namespaces still render, using the namespace as the title.
 const GROUPS = {
@@ -245,7 +252,8 @@ const GROUPS = {
   'longhorn-system': { title: 'Longhorn',          desc: 'Block storage',       order: 31 },
   'velero':          { title: 'Velero',            desc: 'Backups',             order: 32 },
   'falco':           { title: 'Falco',             desc: 'Runtime detection',   order: 33 },
-  'flux-system':     { title: 'FluxCD',            desc: 'GitOps controllers',  order: 34 },
+  'pisentry':        { title: 'pisentry',          desc: 'Host security agent', order: 34 },
+  'flux-system':     { title: 'FluxCD',            desc: 'GitOps controllers',  order: 35 },
 };
 const HIDE_NS = new Set(['kube-system', 'cluster-dashboard']);
 const HIDE_WL = /^(csi-|engine-image-|longhorn-driver-deployer|svclb-|kube-prometheus-stack-(operator|kube-state-metrics)$)/;
@@ -255,6 +263,8 @@ const SHORT = {
   'kube-prometheus-stack-grafana': 'grafana',
   'kube-prometheus-stack-prometheus-node-exporter': 'node-exporter',
 };
+// CI job names as shown in the PR security review card.
+const JOB_SHORT = { 'claude-review': 'claude review', 'kustomize-build': 'kustomize', 'plaintext-credentials': 'credential scan' };
 const FLOW = [
   { n: '01', label: 'Git push',   sub: 'pull request, review, merge' },
   { n: '02', label: 'FluxCD',     sub: 'reconcile main' },
@@ -265,7 +275,7 @@ const FLOW = [
 const STACK = [
   ['Runtime', 'k3s'], ['GitOps', 'FluxCD'], ['Secrets', 'SOPS + age'], ['Ingress', 'Cloudflare Tunnel'],
   ['Proxy', 'Traefik'], ['Metrics', 'Prometheus'], ['Dashboards', 'Grafana'], ['Storage', 'Longhorn'],
-  ['Backups', 'Velero'], ['Runtime security', 'Falco'], ['Updates', 'Renovate'],
+  ['Backups', 'Velero'], ['Runtime security', 'Falco'], ['Host security', 'pisentry'], ['Updates', 'Renovate'],
 ];
 
 // ---- helpers ----
@@ -290,6 +300,13 @@ function durShort(sec) {
   const d = Math.floor(sec / 86400); if (d >= 1) return d + 'd';
   const h = Math.floor(sec / 3600); if (h >= 1) return h + 'h';
   return Math.floor(sec / 60) + 'm';
+}
+// Rounded up, for "every detector ran within N".
+function within(sec) {
+  const s = Math.max(0, sec);
+  if (s >= 86400) return Math.ceil(s / 86400) + 'd';
+  if (s >= 3600) return Math.ceil(s / 3600) + 'h';
+  return Math.max(1, Math.ceil(s / 60)) + 'm';
 }
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtHour = t => `${MONTHS[t.getMonth()]} ${t.getDate()}, ${pad(t.getHours())}:${pad(t.getMinutes())}`;
@@ -535,42 +552,61 @@ function renderPlatform() {
 }
 
 function renderSecurity() {
-  const el = $('security');
-  const cards = [];
-  const card = (title, text, live = '', state = null) => cards.push(
-    `<div class="card sc"><div class="sc-h"><b>${title}</b>${state ? `<span class="dot ${state}"></span>` : ''}</div><p>${text}</p>${live ? `<div class="live">${live}</div>` : ''}</div>`);
-
-  card('Zero trust ingress', 'Cloudflare Tunnels and Access in front of every app. No inbound ports on the LAN.');
-  card('Encrypted secrets', 'SOPS with age. Only Flux holds the key and decrypts in cluster.');
-  card('GitOps only', 'Flux applies main. No manual kubectl. Every change has a commit and a reviewer.');
+  // Two groups: "monitored" cards carry a dot and a live line and sit in a 2x2
+  // grid so their live lines do not wrap; "by design" cards are static text in
+  // a 3x2 grid. Both grids fill every row.
+  const live = [], design = [];
+  const card = (list, title, text, extra = '', state = null) => list.push(
+    `<div class="card sc"><div class="sc-h"><b>${title}</b>${state ? `<span class="dot ${state}"></span>` : ''}</div><p>${text}</p>${extra ? `<div class="live">${extra}</div>` : ''}</div>`);
 
   // PR security review, live from the Actions API.
   const ci = H && H.ci;
-  let live = '<span class="dim">no run data</span>', state = null;
+  let ciLive = '<span class="dim">no run data</span>', ciState = null;
   if (ci) {
     const ok = ci.conclusion === 'success';
-    state = ok ? 'ok' : 'bad';
-    const jobs = (ci.jobs || []).map(j => `<span class="chip ${j.conclusion === 'success' ? '' : 'bad'}">${esc(j.name)}</span>`).join('');
-    live = `<a href="${esc(ci.html_url)}" target="_blank" rel="noopener">run ${esc(ci.run_number)}</a><span class="${ok ? 'ok' : 'bad'}">${esc(ci.conclusion)}</span><span>${ago(Date.parse(ci.updated_at) / 1000)}</span>${jobs}`;
+    ciState = ok ? 'ok' : 'bad';
+    const jobs = (ci.jobs || []).map(j => `<span class="chip ${j.conclusion === 'success' ? '' : 'bad'}">${esc(JOB_SHORT[j.name] || j.name)}</span>`).join('');
+    ciLive = `<a href="${esc(ci.html_url)}" target="_blank" rel="noopener">run ${esc(ci.run_number)}</a><span class="${ok ? 'ok' : 'bad'}">${esc(ci.conclusion)}</span><span>${ago(Date.parse(ci.updated_at) / 1000)}</span>${jobs}`;
   }
-  card('PR security review', 'Every pull request runs Claude Code Security Review, a plaintext credential scan and a kustomize build. Merge waits on green.', live, state);
-
-  const falco = wl('falco', 'falco');
-  card('Runtime detection', 'Falco on every node watches syscalls for container escapes and shells.',
-    falco ? `<span class="${falco.healthy ? 'ok' : 'bad'}">${falco.available}/${falco.desired} nodes</span>` : '<span class="dim">no data</span>',
-    falco ? (falco.healthy ? 'ok' : 'bad') : null);
+  card(live, 'PR security review', 'Every pull request runs Claude Code Security Review, a plaintext credential scan and a kustomize build. Merge waits on green.', ciLive, ciState);
 
   const velero = wl('velero', 'velero'), agent = wl('velero', 'node-agent');
   const bOk = velero && velero.healthy && (!agent || agent.healthy);
-  card('Backups', 'Velero to off cluster MinIO. Pod volume data included.',
+  card(live, 'Backups', 'Velero to off cluster MinIO. Pod volume data included.',
     velero ? `<span class="${bOk ? 'ok' : 'warn'}">velero ${velero.available}/${velero.desired}</span>${agent ? `<span class="${agent.healthy ? 'ok' : 'warn'}">node-agent ${agent.available}/${agent.desired}</span>` : ''}` : '<span class="dim">no data</span>',
     velero ? (bOk ? 'ok' : 'warn') : null);
 
-  card('Namespace isolation', 'One namespace and one tunnel per app, each with its own credentials.');
-  card('Automated patching', 'Renovate opens pinned image and chart bumps. Nothing runs on latest.',
+  const falco = wl('falco', 'falco');
+  card(live, 'Runtime detection', 'Falco on every node watches syscalls for container escapes and shells.',
+    falco ? `<span class="${falco.healthy ? 'ok' : 'bad'}">${falco.available}/${falco.desired} nodes</span>` : '<span class="dim">no data</span>',
+    falco ? (falco.healthy ? 'ok' : 'bad') : null);
+
+  // Host security agent. Coverage only: this page is public, so no categories,
+  // hosts, check IDs or finding counts. Reach, freshness and one flag.
+  const ps = M ? M.pisentry : undefined;
+  let psLive = '<span class="dim">no data</span>', psState = null;
+  if (ps === null) psLive = '<span class="dim">not deployed</span>';
+  else if (ps) {
+    const cov = ps.agents_up >= ps.nodes ? 'ok' : ps.agents_up > 0 ? 'warn' : 'bad';
+    const age = ps.detector_max_age_s;
+    const stale = age == null || age > PISENTRY_STALE;
+    psState = cov === 'bad' ? 'bad' : (cov === 'warn' || stale || ps.attention) ? 'warn' : 'ok';
+    psLive = `<span class="${cov}">${ps.agents_up}/${ps.nodes} nodes</span>`
+      + `<span class="${stale ? 'warn' : ''}">${age == null ? 'detectors no data' : `detectors within ${within(age)}`}</span>`
+      + `<span class="${ps.attention ? 'warn' : 'ok'}">${ps.attention ? 'attention' : 'clear'}</span>`;
+  }
+  card(live, 'Host security', 'pisentry on every node. Watches logins, files, listeners and processes, and audits host posture.', psLive, psState);
+
+  card(design, 'Zero trust ingress', 'Cloudflare Tunnels and Access in front of every app. No inbound ports on the LAN.');
+  card(design, 'Encrypted secrets', 'SOPS with age. Only Flux holds the key and decrypts in cluster.');
+  card(design, 'GitOps only', 'Flux applies main. No manual kubectl. Every change has a commit and a reviewer.');
+  card(design, 'Namespace isolation', 'One namespace and one tunnel per app, each with its own credentials.');
+  card(design, 'Automated patching', 'Renovate opens pinned image and chart bumps. Nothing runs on latest.',
     H && H.renovate_last_success ? `<span>last run ${ago(H.renovate_last_success)}</span>` : '');
-  card('Pod hardening', 'Non root, dropped privilege escalation, resource limits, read only mounts where the app allows.');
-  el.innerHTML = cards.join('');
+  card(design, 'Pod hardening', 'Non root, dropped privilege escalation, resource limits, read only mounts where the app allows.');
+
+  $('securityLive').innerHTML = live.join('');
+  $('security').innerHTML = design.join('');
 }
 
 function renderAll() {
