@@ -7,25 +7,63 @@ metadata:
     app.kubernetes.io/name: falco
     app.kubernetes.io/part-of: security
 data:
+  # Falco main config. Replaces the image's /etc/falco/falco.yaml entirely
+  # (the DaemonSet passes -c), so anything the image default relies on must
+  # be set here. Keys are checked against the 0.45.0 schema.
   falco.yaml: |
     # ── Engine ──────────────────────────────────────────────────────
+    # modern_ebpf needs a kernel that exposes BTF (/sys/kernel/btf/vmlinux).
     engine:
       kind: modern_ebpf
       modern_ebpf:
         buf_size_preset: 4
 
-    container_engines:
-      docker:
-        enabled: false
-      cri:
-        enabled: true
-        sockets:
-          - /run/containerd/containerd.sock
-
     # ── Rules ───────────────────────────────────────────────────────
+    # Bundled stable ruleset first, then the local overrides below.
+    # Paths are explicit on purpose: the whole ConfigMap is mounted at
+    # /etc/falco/config, so a directory entry would also load falco.yaml
+    # as a rules file.
     rules_files:
       - /etc/falco/falco_rules.yaml
-      - /etc/falco/rules.d/falco_rules.local.yaml
+      - /etc/falco/config/falco_rules.local.yaml
+
+    # ── Logging ─────────────────────────────────────────────────────
+    # Falco's own log lines. Without log_stderr they go to syslog only,
+    # which is nowhere inside the container.
+    log_stderr: true
+    log_syslog: false
+    log_level: info
+    time_format_iso_8601: true
+
+    # ── Container and Kubernetes metadata ───────────────────────────
+    # container.* and k8s.* fields come from the bundled container plugin
+    # since Falco 0.41. It is not loaded unless listed here. The plugin
+    # resolves socket paths under HOST_ROOT (/host in the image), so the
+    # DaemonSet mounts the k3s socket at /host/run/k3s/containerd/...
+    load_plugins: [container]
+    plugins:
+      - name: container
+        library_path: libcontainer.so
+        init_config:
+          label_max_len: 100
+          with_size: false
+          engines:
+            docker:
+              enabled: false
+            podman:
+              enabled: false
+            containerd:
+              enabled: false
+            cri:
+              enabled: true
+              sockets:
+                - /run/k3s/containerd/containerd.sock
+            lxc:
+              enabled: false
+            libvirt_lxc:
+              enabled: false
+            bpm:
+              enabled: false
 
     # ── Outputs ─────────────────────────────────────────────────────
     stdout_output:
@@ -37,14 +75,6 @@ data:
     file_output:
       enabled: false
 
-    grpc:
-      enabled: false
-
-    metadata_download:
-      max_mb: 100
-      chunk_wait_us: 1000
-      watch_freq_sec: 1
-
     priority: WARNING
 
     json_output: true
@@ -53,29 +83,33 @@ data:
 
     buffered_outputs: true
 
-    - rule: Read sensitive file untouched
-      append: true
+  # Local rule overrides and homelab rules. Loaded after the bundled
+  # /etc/falco/falco_rules.yaml (falco-rules 5.2.0 in the 0.45.0 image).
+  # Overriding a rule name that is not loaded is a fatal error, so only
+  # rules present in the bundled stable ruleset are touched here.
+  falco_rules.local.yaml: |
+    # ── Exceptions to bundled rules ─────────────────────────────────
+    - rule: Read sensitive file untrusted
       condition: >-
         and not (
           k8s.ns.name = "kube-system"
           and proc.name in (k3s-server, k3s-agent, k3s)
         )
-
-    - rule: Launch Suspicious Network Tool in Container
-      append: true
-      condition: >-
-        and not (
-          k8s.ns.name = "flux-system"
-          and container.image.repository contains "fluxcd"
-        )
+      override:
+        condition: append
 
     - rule: Terminal shell in container
-      append: true
       condition: >-
         and not (
           k8s.ns.name = "renovate"
           and container.image.repository contains "renovate"
         )
+      override:
+        condition: append
+
+    # "Launch Suspicious Network Tool in Container" is in the incubating
+    # ruleset, which the image does not ship. Add the exception for
+    # flux-system back when that ruleset is loaded.
 
     # ================================================================
     # HOMELAB-SPECIFIC DETECTIONS
@@ -91,7 +125,7 @@ data:
         and proc.args contains "exec"
       output: >-
         kubectl exec detected
-        (user=%ka.user.name pod=%k8s.pod.name ns=%k8s.ns.name
+        (user=%user.name pod=%k8s.pod.name ns=%k8s.ns.name
          command=%proc.cmdline)
       priority: WARNING
       tags: [audit, exec, homelab]

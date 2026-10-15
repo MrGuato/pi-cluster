@@ -43,12 +43,12 @@ spec:
           imagePullPolicy: IfNotPresent
 
           # ── Entrypoint ──────────────────────────────────────────
+          # Rules come from rules_files in falco.yaml. Do not add -r here:
+          # a CLI -r replaces that list and drops the bundled ruleset.
           args:
             - /usr/bin/falco
             - -c
             - /etc/falco/config/falco.yaml
-            - -r
-            - /etc/falco/config/falco_rules.local.yaml
           securityContext:
             privileged: true
 
@@ -66,10 +66,6 @@ spec:
               mountPath: /etc/falco/config
               readOnly: true
 
-            - name: falco-config
-              mountPath: /etc/falco/rules.d
-              readOnly: true
-
             - name: dev
               mountPath: /dev
               readOnly: true
@@ -77,9 +73,10 @@ spec:
             - name: proc
               mountPath: /host/proc
               readOnly: true
-            
+
+            # Must sit under /host: the container plugin prepends HOST_ROOT.
             - name: containerd-sock
-              mountPath: /run/containerd/containerd.sock
+              mountPath: /host/run/k3s/containerd/containerd.sock
               readOnly: true
 
       # ── Volumes ─────────────────────────────────────────────────
