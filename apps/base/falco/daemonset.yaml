@@ -33,6 +33,14 @@ spec:
           operator: Exists
           effect: NoSchedule
 
+      # ── Node selection ──────────────────────────────────────────
+      # modern_ebpf needs kernel BTF (/sys/kernel/btf/vmlinux). The
+      # Raspberry Pi kernels (+rpt-rpi-v8) are built with
+      # CONFIG_DEBUG_INFO_NONE and expose none, and Falco 0.44 removed
+      # the legacy eBPF probe. Only the x86_64 node can run it today.
+      nodeSelector:
+        kubernetes.io/arch: amd64
+
       # ── Host namespaces ─────────────────────────────────────────
       hostPID: true
       hostNetwork: true
