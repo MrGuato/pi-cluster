@@ -1,0 +1,14 @@
+This is a FluxCD GitOps repository for an internet-facing k3s cluster. Every merge to main is applied with cluster-admin rights within a minute, so treat Kubernetes, Helm, Flux, and cloudflared YAML as security-critical code.
+
+Report as HIGH:
+- Any literal password, token, key, or credential in YAML, including Helm values blocks. Secrets must be SOPS-encrypted, with values starting with ENC[.
+- A new hostname in a cloudflared ingress rule, which may not be behind Cloudflare Access.
+- Turning off authentication or turning on open registration in an app's config.
+- New ClusterRoles or bindings with broad access, access to secrets, or cluster-admin.
+- privileged, hostPath, hostNetwork, or hostPID outside the falco namespace.
+
+Report as MEDIUM:
+- Images on :latest or untagged, and Helm chart versions given as ranges.
+- Removing or loosening a NetworkPolicy, securityContext, or Pod Security label.
+- New NodePort or LoadBalancer services.
+- GitHub Actions referenced by branch or tag instead of a full commit SHA.
