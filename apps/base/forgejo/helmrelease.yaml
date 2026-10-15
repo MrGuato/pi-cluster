@@ -47,7 +47,7 @@ spec:
       create: true
       mount: true
       claimName: forgejo-data
-      size: 50Gi
+      size: 300Gi   # Longhorn expands the volume online; T7 Shield has ~1.8 TiB
       accessModes:
         - ReadWriteOnce
       storageClass: longhorn-single
