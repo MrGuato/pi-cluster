@@ -34,7 +34,7 @@ spec:
       containers:
         - name: pisentry
           # Multi-arch: arm64 (Pi 4), arm/v7, amd64 (kubethink).
-          image: ghcr.io/mrguato/pisentry:v0.1.0
+          image: ghcr.io/mrguato/pisentry:v0.1.0@sha256:c6d02415ff55504ab1a84a2375776090d123340b5fa90ee083b156d1bb608ec3
           imagePullPolicy: IfNotPresent
           args: ["run", "-config", "/etc/pisentry/config.json"]
           env:
