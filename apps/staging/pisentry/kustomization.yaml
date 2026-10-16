@@ -9,7 +9,8 @@ resources:
   # - secret.yaml
 
 # Example: trust your LAN for the "first login from a new source" rule and
-# pin the image tag here instead of in base.
+# override the image here instead of in base.
 # images:
 #   - name: ghcr.io/mrguato/pisentry
 #     newTag: v0.1.0
+#     digest: sha256:c6d02415ff55504ab1a84a2375776090d123340b5fa90ee083b156d1bb608ec3
