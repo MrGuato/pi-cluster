@@ -46,12 +46,15 @@ spec:
           env:
             - name: DATA_DIR
               value: /data
-            # Set both to require a Cloudflare Access login on every request
-            # (see apps/staging/security-dashboard). Empty means open.
+            # The server refuses every request until both are set (see
+            # apps/staging/security-dashboard/access.yaml). AUTH_MODE=open
+            # is the only way to serve without a login, and it is deliberate.
             - name: CF_ACCESS_TEAM
               value: ""
             - name: CF_ACCESS_AUD
               value: ""
+            - name: AUTH_MODE
+              value: access
           resources:
             requests:
               cpu: 10m

@@ -61,7 +61,7 @@ func main() {
 	}
 	go c.Run(ctx)
 
-	auth := NewAccessAuth(env("CF_ACCESS_TEAM", ""), env("CF_ACCESS_AUD", ""), log)
+	auth := NewAccessAuth(env("CF_ACCESS_TEAM", ""), env("CF_ACCESS_AUD", ""), env("AUTH_MODE", "access"), log)
 	api := &API{Store: store, Collector: c, Log: log}
 
 	ui := http.NewServeMux()

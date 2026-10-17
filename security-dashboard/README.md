@@ -36,7 +36,7 @@ checked against the team's JWKS. Leave both empty to run open.
 
 ```bash
 kubectl proxy --port=8001 &
-KUBE_API=http://127.0.0.1:8001 DATA_DIR=/tmp/sd LISTEN=:8090 INGEST_LISTEN=:8091 \
+AUTH_MODE=open KUBE_API=http://127.0.0.1:8001 DATA_DIR=/tmp/sd LISTEN=:8090 INGEST_LISTEN=:8091 \
   ALERTMANAGER_URL=http://<alertmanager-clusterip>:9093 ./security-dashboard
 ```
 

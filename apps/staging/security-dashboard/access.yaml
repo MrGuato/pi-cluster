@@ -3,7 +3,9 @@
 # Applications > Self-hosted, policy: one-time PIN for your email):
 #   CF_ACCESS_TEAM  the team name, the part before .cloudflareaccess.com
 #   CF_ACCESS_AUD   the application's Audience (AUD) tag from its overview
-# While both are empty the server answers anyone the tunnel lets through.
+# While either is empty the server answers 401 to everything but /healthz,
+# so merging before the Access application exists exposes nothing. Set
+# AUTH_MODE to "open" only for a deployment that is never on the tunnel.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

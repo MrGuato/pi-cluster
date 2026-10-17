@@ -19,10 +19,15 @@ import (
 // AccessAuth verifies the JWT Cloudflare Access attaches to every request
 // that passed its login page. With it on, a request that reaches the pod any
 // other way (tunnel misconfiguration, in-cluster curl) gets a 401 instead of
-// the data. Leave CF_ACCESS_TEAM empty to run open, for example on a LAN.
+// the data.
+//
+// It fails closed: until CF_ACCESS_TEAM and CF_ACCESS_AUD are both set,
+// every request is refused. Running without a login at all (for example on a
+// LAN that never touches the tunnel) needs AUTH_MODE=open, on purpose.
 type AccessAuth struct {
 	team string
 	aud  string
+	open bool
 	log  *slog.Logger
 
 	mu      sync.Mutex
@@ -30,12 +35,20 @@ type AccessAuth struct {
 	fetched time.Time
 }
 
-func NewAccessAuth(team, aud string, log *slog.Logger) *AccessAuth {
+func NewAccessAuth(team, aud, mode string, log *slog.Logger) *AccessAuth {
 	a := &AccessAuth{team: strings.TrimSpace(team), aud: strings.TrimSpace(aud), log: log}
-	if a.team == "" || a.aud == "" {
-		log.Warn("access auth OFF: set CF_ACCESS_TEAM and CF_ACCESS_AUD to require a Cloudflare Access login")
-	} else {
+	a.open = strings.EqualFold(strings.TrimSpace(mode), "open")
+	switch {
+	case a.Enabled():
 		log.Info("access auth on", "team", a.team)
+		if a.open {
+			log.Warn("AUTH_MODE=open ignored because CF_ACCESS_TEAM and CF_ACCESS_AUD are set")
+			a.open = false
+		}
+	case a.open:
+		log.Warn("access auth OFF by AUTH_MODE=open: anyone who reaches this port sees everything")
+	default:
+		log.Error("access auth not configured: refusing every request until CF_ACCESS_TEAM and CF_ACCESS_AUD are set (or AUTH_MODE=open)")
 	}
 	return a
 }
@@ -43,8 +56,13 @@ func NewAccessAuth(team, aud string, log *slog.Logger) *AccessAuth {
 func (a *AccessAuth) Enabled() bool { return a.team != "" && a.aud != "" }
 
 func (a *AccessAuth) Wrap(next http.Handler) http.Handler {
-	if !a.Enabled() {
+	if a.open {
 		return next
+	}
+	if !a.Enabled() {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "auth not configured: set CF_ACCESS_TEAM and CF_ACCESS_AUD", http.StatusUnauthorized)
+		})
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tok := r.Header.Get("Cf-Access-Jwt-Assertion")
