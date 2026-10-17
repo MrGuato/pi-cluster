@@ -143,11 +143,26 @@ data:
         A process inside a container read a file under
         /var/run/secrets/kubernetes.io. Could be normal service
         account token usage, or could be credential harvesting.
+        Cluster operators that talk to the API server all day are
+        excepted by namespace plus image; anything else still fires.
       condition: >-
         open_read
         and container
         and fd.name startswith /var/run/secrets/kubernetes.io
         and not proc.name in (coredns, traefik, k3s)
+      exceptions:
+        - name: cluster_operators
+          fields: [k8s.ns.name, container.image.repository]
+          comps: ["=", contains]
+          values:
+            - [flux-system, fluxcd/]
+            - [velero, velero/velero]
+            - [longhorn-system, longhornio/]
+            - [monitoring, prometheus/]
+            - [monitoring, prometheus-operator/]
+            - [monitoring, kube-state-metrics/]
+            - [monitoring, grafana/grafana]
+            - [monitoring, kiwigrid/k8s-sidecar]
       output: >-
         Secret file read in container
         (user=%user.name process=%proc.name file=%fd.name
