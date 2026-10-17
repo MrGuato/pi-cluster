@@ -20,6 +20,20 @@ data:
     mkdir -p "$OUT" /data/scan/cache
     export TRIVY_CACHE_DIR=/data/scan/cache
     echo "[scan] trivy $(trivy --version 2>/dev/null | head -1), rescan after ${RESCAN_AFTER}m"
+    # Trivy picks one platform from a multi-arch index and fails on an image
+    # that is published for a single architecture only. Try its default, then
+    # each architecture this cluster runs.
+    scan_one() {
+      img=$1; out=$2
+      for plat in "" linux/arm64 linux/amd64; do
+        # ${plat:+...} expands to nothing on the first, platform-less try.
+        if trivy image --scanners vuln --format json --quiet --timeout 15m -o "$out" ${plat:+--platform "$plat"} "$img" > /tmp/trivy.log 2>&1; then
+          return 0
+        fi
+        grep -q "no child with platform" /tmp/trivy.log || return 1
+      done
+      return 1
+    }
     while true; do
       if [ ! -s "$LIST" ]; then
         echo "[scan] waiting for $LIST"; sleep 60; continue
@@ -43,7 +57,7 @@ data:
           skipped=$((skipped+1)); continue
         fi
         printf '%s' "$img" > "$STATUS"
-        if trivy image --scanners vuln --format json --quiet --timeout 15m -o "$OUT/$h.json.tmp" "$img" > /tmp/trivy.log 2>&1; then
+        if scan_one "$img" "$OUT/$h.json.tmp"; then
           mv "$OUT/$h.json.tmp" "$OUT/$h.json"
           rm -f "${OUT:?}/${h:?}.err"
           echo "[scan] ok   $img"
