@@ -25,7 +25,7 @@ spec:
               echo "PostgreSQL is ready!"
       containers:
         - name: vikunja
-          image: vikunja/vikunja:latest
+          image: vikunja/vikunja:2.7.0
           ports:
             - name: http
               containerPort: 3456
