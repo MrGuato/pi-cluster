@@ -19,7 +19,7 @@ spec:
         kubernetes.io/hostname: kubethink
       containers:
         - name: cloudflared
-          image: cloudflare/cloudflared:latest
+          image: cloudflare/cloudflared:2026.9.1
           args:
             - tunnel
             - --config
