@@ -26,7 +26,7 @@ import (
 //go:embed web/index.html
 var web embed.FS
 
-const version = "v0.1.1"
+const version = "v0.2.0"
 
 func main() {
 	fs := flag.NewFlagSet("security-dashboard", flag.ExitOnError)
@@ -50,6 +50,7 @@ func main() {
 	kube := NewKube(log)
 	c := &Collector{
 		Store:        store,
+		History:      OpenHistory(*dataDir, log),
 		Kube:         kube,
 		Log:          log,
 		PisentryNS:   env("PISENTRY_NAMESPACE", "pisentry"),

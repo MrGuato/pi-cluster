@@ -147,6 +147,7 @@ type ImageVulns struct {
 	Top       []Vuln    `json:"top"`
 	Workloads []string  `json:"workloads"`
 	Stale     bool      `json:"stale"`
+	RedDays   int       `json:"red_days"` // daily snapshots in a row with critical fixable CVEs, today included
 	Error     string    `json:"error,omitempty"`
 }
 

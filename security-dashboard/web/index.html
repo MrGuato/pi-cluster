@@ -60,14 +60,35 @@ section{margin-bottom:32px}
 .sec-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);gap:12px;flex-wrap:wrap}
 .sec-h h2{font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text-2)}
 .sec-h .meta{font:12px var(--mono);color:var(--text-3)}
+.sec-h .meta b{font-weight:600;color:var(--text-2)}
+.sec-h .meta b.warn{color:var(--warn)}.sec-h .meta b.bad{color:var(--bad)}.sec-h .meta b.crit{color:var(--crit)}
 .sec-h .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sec-h.tog{cursor:pointer;user-select:none}
+.sec-h.tog:hover h2{color:var(--text)}
+.sec-h.tog:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.sec-h .ttl{display:flex;align-items:center;gap:10px}
+.chev{width:6px;height:6px;border-right:1.5px solid var(--text-3);border-bottom:1.5px solid var(--text-3);transform:translateY(-2px) rotate(45deg);flex-shrink:0}
+section.closed .chev{transform:translateX(-2px) rotate(-45deg)}
+section.closed .sec-body,section.closed .sec-h .seg{display:none}
+section.closed{margin-bottom:14px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);min-width:0}
 
 .tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border)}
-.tile{background:var(--surface);padding:14px 16px;min-height:88px;display:flex;flex-direction:column;min-width:0}
+.tile{background:var(--surface);padding:14px 16px;min-height:104px;display:flex;flex-direction:column;min-width:0}
 .t-k{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
 .t-v{font:600 24px var(--mono);margin-top:6px;letter-spacing:-.01em;line-height:1.1}
 .t-s{font-size:12px;color:var(--text-3);margin-top:3px}
+.spark{display:block;width:100%;min-width:0;height:26px;margin-top:auto;padding-top:8px}
+.sp-line{fill:none;stroke:var(--info);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.sp-area{fill:var(--info);opacity:.1}
+
+.trend{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-bottom:0;padding:8px 16px}
+.trend .lbl{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text-3);white-space:nowrap}
+.trend svg{flex:1;min-width:0;height:28px;display:block}
+.legend{display:flex;gap:10px;font:11px var(--mono);color:var(--text-3);white-space:nowrap}
+.legend i{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:-1px}
+.c-crit{fill:var(--crit)}.c-bad{fill:var(--bad)}.c-warn{fill:var(--warn)}.c-ok{fill:var(--ok)}.c-na{fill:var(--nodata)}
+.legend .c-crit{background:var(--crit)}.legend .c-bad{background:var(--bad)}.legend .c-warn{background:var(--warn)}.legend .c-ok{background:var(--ok)}
 
 .chip{font:11px var(--mono);padding:2px 7px;border:1px solid var(--border);border-radius:var(--r);color:var(--text-2);background:var(--surface-2);white-space:nowrap}
 .chip.bad{border-color:var(--bad);color:var(--bad)}.chip.warn{border-color:var(--warn);color:var(--warn)}.chip.crit{border-color:var(--crit);color:var(--crit)}
@@ -171,10 +192,15 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
   </header>
 
   <section>
+    <div class="trend">
+      <span class="lbl">Open items, 14d</span>
+      <svg id="trend" aria-label="open items by severity, last 14 days"></svg>
+      <span class="legend"><span><i class="c-crit"></i>critical</span><span><i class="c-bad"></i>high</span><span><i class="c-warn"></i>medium</span><span><i class="c-ok"></i>none</span></span>
+    </div>
     <div class="tiles">
       <div class="tile"><div class="t-k">Needs attention</div><div class="t-v" id="tOpen">-</div><div class="t-s" id="tOpenSub">medium and above</div></div>
-      <div class="tile"><div class="t-k">Host events</div><div class="t-v" id="tHost">-</div><div class="t-s" id="tHostSub">pisentry, 24h</div></div>
-      <div class="tile"><div class="t-k">Runtime events</div><div class="t-v" id="tFalco">-</div><div class="t-s" id="tFalcoSub">Falco, 24h</div></div>
+      <div class="tile"><div class="t-k">Host events</div><div class="t-v" id="tHost">-</div><div class="t-s" id="tHostSub">pisentry, 24h</div><svg class="spark" id="sHost" aria-label="pisentry events per day, 14 days"></svg></div>
+      <div class="tile"><div class="t-k">Runtime events</div><div class="t-v" id="tFalco">-</div><div class="t-s" id="tFalcoSub">Falco, 24h</div><svg class="spark" id="sFalco" aria-label="Falco events per day, 14 days"></svg></div>
       <div class="tile"><div class="t-k">Exploited CVEs</div><div class="t-v" id="tKev">-</div><div class="t-s" id="tKevSub">in running images</div></div>
       <div class="tile"><div class="t-k">Critical fixable</div><div class="t-v" id="tCrit">-</div><div class="t-s" id="tCritSub">CVEs with a fix</div></div>
       <div class="tile"><div class="t-k">Coverage</div><div class="t-v" id="tCov">-</div><div class="t-s" id="tCovSub">pisentry / Falco</div></div>
@@ -195,24 +221,24 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
     <div class="list" id="attention"></div>
   </section>
 
-  <section>
-    <div class="sec-h"><h2>Hosts</h2><span class="meta" id="hostsMeta"></span></div>
-    <div class="hosts" id="hosts"></div>
+  <section data-sec="hosts">
+    <div class="sec-h"><div class="ttl"><span class="chev"></span><h2>Hosts</h2></div><span class="meta" id="hostsMeta"></span></div>
+    <div class="sec-body hosts" id="hosts"></div>
   </section>
 
-  <section>
-    <div class="sec-h"><h2>Runtime detection</h2><span class="meta" id="falcoMeta"></span></div>
-    <div id="falco"></div>
+  <section data-sec="falco">
+    <div class="sec-h"><div class="ttl"><span class="chev"></span><h2>Runtime detection</h2></div><span class="meta" id="falcoMeta"></span></div>
+    <div class="sec-body" id="falco"></div>
   </section>
 
-  <section>
-    <div class="sec-h"><h2>Image vulnerabilities</h2><span class="meta" id="vulnMeta"></span></div>
-    <div id="vulns"></div>
+  <section data-sec="vulns">
+    <div class="sec-h"><div class="ttl"><span class="chev"></span><h2>Image vulnerabilities</h2></div><span class="meta" id="vulnMeta"></span></div>
+    <div class="sec-body" id="vulns"></div>
   </section>
 
-  <section>
-    <div class="sec-h"><h2>Cluster posture</h2><span class="meta" id="postureMeta"></span></div>
-    <div id="posture"></div>
+  <section data-sec="posture">
+    <div class="sec-h"><div class="ttl"><span class="chev"></span><h2>Cluster posture</h2></div><span class="meta" id="postureMeta"></span></div>
+    <div class="sec-body" id="posture"></div>
   </section>
 
   <section>
@@ -220,8 +246,8 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
     <div class="list" id="alerts"></div>
   </section>
 
-  <section class="feed">
-    <div class="sec-h"><h2>Event feed</h2>
+  <section class="feed" data-sec="feed">
+    <div class="sec-h"><div class="ttl"><span class="chev"></span><h2>Event feed</h2></div>
       <div class="tools">
         <div class="seg" id="srcSeg" role="group" aria-label="Source">
           <button type="button" data-s="" class="on">All</button>
@@ -236,7 +262,7 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
         <span class="meta" id="feedMeta"></span>
       </div>
     </div>
-    <div class="list" id="feed"></div>
+    <div class="sec-body list" id="feed"></div>
   </section>
 
   <footer>
@@ -283,6 +309,67 @@ function when(t) {
 }
 const sevClass = s => ({ critical: 'crit', high: 'bad', medium: 'warn' }[s] || '');
 const n = v => (v ?? 0).toLocaleString();
+const plural = (c, w) => `${n(c)} ${w}${c === 1 ? '' : 's'}`;
+const dayLabel = d => { const t = new Date(d + 'T00:00:00Z'); return isNaN(t) ? d : t.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }); };
+
+// ---- svg ----
+function spark(svg, vals) {
+  if (!svg) return;
+  const v = (vals || []).map(x => x == null ? null : +x);
+  const nums = v.filter(x => x != null);
+  if (nums.length < 2) { svg.innerHTML = ''; return; }
+  const w = 100, h = 26, len = v.length;
+  let min = Math.min(...nums), max = Math.max(...nums);
+  const padY = (max - min) * 0.15 || 1; min -= padY; max += padY;
+  const span = max - min;
+  let d = '';
+  v.forEach((x, i) => {
+    if (x == null) return;
+    const px = (i / (len - 1)) * w, py = h - ((x - min) / span) * h;
+    d += (d ? 'L' : 'M') + px.toFixed(2) + ' ' + py.toFixed(2);
+  });
+  svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML = `<path class="sp-area" d="${d} L${w} ${h} L0 ${h} Z"/><path class="sp-line" d="${d}"/>`;
+}
+// trend draws one stacked bar per day: critical at the base, then high,
+// then medium, scaled to the busiest day. A flat green mark is a quiet
+// day, grey is a day with no snapshot.
+function trend(svg, days) {
+  if (!svg) return;
+  const len = days.length, h = 28, cw = 10, bw = 8, base = 3;
+  const max = Math.max(1, ...days.map(d => d && d.open_by_sev ? d.open : 0));
+  svg.setAttribute('viewBox', `0 0 ${len * cw} ${h}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML = days.map((d, i) => {
+    const x = i * cw + 1, label = dayLabel(d.day);
+    if (!d.open_by_sev) return `<rect class="c-na" x="${x}" y="${h - base}" width="${bw}" height="${base}"><title>${esc(label)}: no snapshot</title></rect>`;
+    if (!d.open) return `<rect class="c-ok" x="${x}" y="${h - base}" width="${bw}" height="${base}"><title>${esc(label)}: nothing open</title></rect>`;
+    let y = h, rects = '';
+    for (const [k, cls] of [['critical', 'c-crit'], ['high', 'c-bad'], ['medium', 'c-warn']]) {
+      const c = d.open_by_sev[k] || 0; if (!c) continue;
+      const bh = Math.max(2, (c / max) * (h - 2)); y -= bh;
+      rects += `<rect class="${cls}" x="${x}" y="${y.toFixed(1)}" width="${bw}" height="${bh.toFixed(1)}"/>`;
+    }
+    const parts = ['critical', 'high', 'medium'].filter(k => d.open_by_sev[k]).map(k => `${d.open_by_sev[k]} ${k}`).join(', ');
+    return `<g><title>${esc(label)}: ${esc(parts)}</title>${rects}</g>`;
+  }).join('');
+}
+
+// ---- collapsible sections ----
+// Hosts, Runtime detection, Image vulnerabilities, Cluster posture and the
+// Event feed start closed and show a one-line summary. The choice is kept
+// per section in localStorage; ?open=all expands everything for one load.
+const openAll = new URLSearchParams(location.search).get('open') === 'all';
+document.querySelectorAll('section[data-sec]').forEach(sec => {
+  const id = sec.dataset.sec, h = sec.querySelector('.sec-h');
+  const set = on => { sec.classList.toggle('closed', !on); h.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+  set(openAll || safeGet('sec:' + id) === '1');
+  h.classList.add('tog'); h.setAttribute('role', 'button'); h.tabIndex = 0;
+  const toggle = () => { const on = sec.classList.contains('closed'); set(on); safeSet('sec:' + id, on ? '1' : '0'); };
+  h.addEventListener('click', e => { if (e.target.closest('.seg, button, a')) return; toggle(); });
+  h.addEventListener('keydown', e => { if (e.target !== h) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+});
 
 // ---- theme ----
 function applyTheme(t) {
@@ -337,6 +424,25 @@ function renderTiles() {
   $('tCov').textContent = `${a.pisentry_up}/${a.nodes} · ${a.falco_up}/${a.nodes}`;
   $('tCov').className = 't-v ' + (a.pisentry_up < a.nodes ? 'warn' : '');
   $('tCovSub').textContent = a.falco_up < a.nodes && a.falco_up >= a.falco_max ? 'pisentry / Falco (Pi kernels lack BTF)' : 'pisentry / Falco';
+  const ev = (state.history && state.history.events) || [];
+  spark($('sHost'), ev.map(d => d.pisentry));
+  spark($('sFalco'), ev.map(d => d.falco));
+}
+
+// ---- trend ----
+// One bar per day for the last 14 days. Past days come from the daily
+// snapshots; today is the live queue so the strip never lags the tiles.
+function renderTrend() {
+  const h = state.history || {}, ev = h.events || [], snaps = h.snapshots || [];
+  if (!ev.length) { $('trend').innerHTML = ''; return; }
+  const byDay = {};
+  snaps.forEach(s => { byDay[s.day] = s; });
+  const days = ev.map((d, i) => {
+    if (i === ev.length - 1) return { day: d.day, open: state.summary.open, open_by_sev: state.summary.open_by_sev };
+    const s = byDay[d.day];
+    return s ? { day: d.day, open: s.open, open_by_sev: s.open_by_sev || {} } : { day: d.day };
+  });
+  trend($('trend'), days);
 }
 
 // ---- attention ----
@@ -381,8 +487,10 @@ $('attention').addEventListener('click', async e => {
 
 // ---- hosts ----
 function renderHosts() {
-  const hs = state.hosts;
-  $('hostsMeta').textContent = `${hs.filter(h => h.up).length} of ${hs.length} agents reporting`;
+  const hs = state.hosts, up = hs.filter(h => h.up).length;
+  const fails = hs.reduce((a, h) => a + h.posture_failing.length, 0);
+  const ev = hs.reduce((a, h) => a + h.events_24h, 0);
+  $('hostsMeta').innerHTML = `<b class="${up < hs.length ? 'bad' : ''}">${up} of ${hs.length}</b> agents up · <b>${n(ev)}</b> events 24h · <b class="${fails ? 'warn' : ''}">${n(fails)}</b> failing checks`;
   $('hosts').innerHTML = hs.map(h => {
     const cats = h.categories_24h.length ? h.categories_24h.map(c => `<span class="chip ${sevClass(c.worst)}" title="${esc(c.name)}">${esc(c.id)} ${esc(c.name)} ${n(c.count)}</span>`).join('') : '<span class="dim mono" style="font-size:12px">no events in 24h</span>';
     const fails = h.posture_failing.length ? h.posture_failing.map(f => `<div><span class="dot ${esc(f.severity)}"></span><span class="cid">${esc(f.id)}</span><span>${esc(f.title)}</span></div>`).join('') : '<div class="dim">all posture checks pass</div>';
@@ -400,7 +508,8 @@ function renderHosts() {
 // ---- falco ----
 function renderFalco() {
   const f = state.falco, a = state.agents;
-  $('falcoMeta').textContent = `${n(f.total)} events on ${a.falco_up} of ${a.nodes} node${a.nodes === 1 ? '' : 's'}`;
+  const worst = f.rules.length ? f.rules[0].severity : '';
+  $('falcoMeta').innerHTML = `<b>${n(f.total)}</b> events 24h · <b>${plural(f.rules.length, 'rule')}</b>${worst ? ` · worst <b class="${sevClass(worst)}">${esc(worst)}</b>` : ''} · ${a.falco_up} of ${a.nodes} node${a.nodes === 1 ? '' : 's'}`;
   if (!f.rules.length) { $('falco').innerHTML = `<div class="empty">${a.falco_up ? 'No Falco events in 24h.' : 'Falco is not running, or http_output is not pointed at this service.'}</div>`; return; }
   $('falco').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th></th><th>Rule</th><th class="n">Count</th><th>Namespaces</th><th class="n">Pods</th><th>Last</th></tr></thead><tbody>` +
     f.rules.map((r, i) => {
@@ -417,10 +526,11 @@ function vulnLine(v) {
   return `<div><span class="id ${v.kev ? 'crit' : sevClass(v.severity)}">${esc(v.id)}</span><span class="chip ${sevClass(v.severity)}">${esc(v.severity)}</span>${v.kev ? `<span class="chip crit">KEV${v.ransomware ? ' ransomware' : ''}${v.kev_due ? ' due ' + esc(v.kev_due) : ''}</span>` : ''}<span class="pk">${esc(v.pkg)} ${esc(v.installed)}</span>${v.fixed ? `<span class="fx">fix ${esc(v.fixed)}</span>` : '<span class="nf">no fix</span>'}${v.cvss ? `<span class="nf">cvss ${v.cvss}</span>` : ''}${v.url ? `<a href="${esc(v.url)}" target="_blank" rel="noopener" class="nf">details</a>` : ''}</div>`;
 }
 function renderVulns() {
-  const v = state.vulns, imgs = v.images;
-  const kev = v.kev_count ? `KEV ${n(v.kev_count)} entries, ${ago(v.kev_fetched)}` : 'KEV catalog not loaded';
+  const v = state.vulns, imgs = v.images, s = state.summary;
+  const kev = v.kev_count ? `KEV catalog ${n(v.kev_count)}, ${ago(v.kev_fetched)}` : 'KEV catalog not loaded';
   const last = v.last_run && new Date(v.last_run).getFullYear() > 2000 ? `last scan ${ago(v.last_run)}` : 'no scans yet';
-  $('vulnMeta').textContent = `${imgs.filter(i => i.scanned_at && new Date(i.scanned_at).getFullYear() > 2000).length} of ${imgs.length} images · ${last} · ${kev}${v.scanning ? ' · scanning ' + v.scanning : ''}`;
+  const scannedN = imgs.filter(i => i.scanned_at && new Date(i.scanned_at).getFullYear() > 2000).length;
+  $('vulnMeta').innerHTML = `<b>${scannedN} of ${imgs.length}</b> images scanned · <b class="${s.kev_hits ? 'crit' : ''}">${n(s.kev_hits)}</b> exploited · <b class="${s.critical_fixable ? 'bad' : ''}">${n(s.critical_fixable)}</b> critical fixable in <b class="${s.red_images ? 'bad' : ''}">${plural(s.red_images, 'image')}</b> · ${last} · ${kev}${v.scanning ? ' · scanning ' + esc(v.scanning) : ''}`;
   const errs = v.error ? `<div class="err">${esc(v.error)}</div>` : '';
   if (!imgs.length) { $('vulns').innerHTML = errs + '<div class="empty">No running images found yet.</div>'; return; }
   $('vulns').innerHTML = errs + `<div class="tbl-wrap"><table><thead><tr><th>Image</th><th class="n">Crit</th><th class="n">High</th><th class="n">Med</th><th class="n">Low</th><th class="n">Fixable</th><th class="n">KEV</th><th>Scanned</th></tr></thead><tbody>` +
@@ -428,8 +538,9 @@ function renderVulns() {
       const k = 'v:' + i.image, o = open.has(k);
       const scanned = i.scanned_at && new Date(i.scanned_at).getFullYear() > 2000;
       const st = i.error ? '<span class="bad">failed</span>' : scanned ? (i.stale ? `<span class="warn">${esc(ago(i.scanned_at))}</span>` : esc(ago(i.scanned_at))) : '<span class="dim">pending</span>';
+      const red = i.red_days ? ` <span class="chip bad" title="critical CVEs with a fix in ${i.red_days} daily snapshot${i.red_days === 1 ? '' : 's'} in a row">red for ${plural(i.red_days, 'day')}</span>` : '';
       const detail = o ? `<tr class="xd"><td colspan="8"><div class="vl">${i.error ? `<div class="bad">${esc(i.error)}</div>` : ''}<div class="nf">${esc(i.os || '')} · ${esc(i.workloads.join(', '))}</div>${i.top.length ? i.top.map(vulnLine).join('') : (scanned ? '<div class="nf">no high or critical findings</div>' : '')}</div></td></tr>` : '';
-      return `<tr class="x" data-k="${esc(k)}"><td>${esc(i.short)}</td>
+      return `<tr class="x" data-k="${esc(k)}"><td>${esc(i.short)}${red}</td>
         <td class="n ${i.critical ? 'crit' : ''}">${scanned ? n(i.critical) : '-'}</td><td class="n ${i.high ? 'bad' : ''}">${scanned ? n(i.high) : '-'}</td>
         <td class="n">${scanned ? n(i.medium) : '-'}</td><td class="n">${scanned ? n(i.low) : '-'}</td><td class="n">${scanned ? n(i.fixable) : '-'}</td>
         <td class="n ${i.kev.length ? 'crit' : ''}">${scanned ? n(i.kev.length) : '-'}</td><td class="m">${st}</td></tr>` + detail;
@@ -439,7 +550,9 @@ function renderVulns() {
 // ---- posture ----
 function renderPosture() {
   const p = state.posture, f = p.findings;
-  $('postureMeta').textContent = p.error ? 'pod list failed' : `${f.length} finding${f.length === 1 ? '' : 's'} across workloads, ${ago(p.at)}`;
+  const by = {}; f.forEach(x => { by[x.severity] = (by[x.severity] || 0) + 1; });
+  const parts = ['high', 'medium', 'low'].filter(k => by[k]).map(k => `<b class="${sevClass(k)}">${by[k]} ${k}</b>`).join(', ');
+  $('postureMeta').innerHTML = p.error ? '<b class="bad">pod list failed</b>' : `<b>${plural(f.length, 'finding')}</b>${parts ? ': ' + parts : ''} · ${ago(p.at)}`;
   const errs = p.error ? `<div class="err">${esc(p.error)}</div>` : '';
   if (!f.length) { $('posture').innerHTML = errs + '<div class="empty">No risky pod settings found.</div>'; return; }
   $('posture').innerHTML = errs + `<div class="tbl-wrap"><table><thead><tr><th></th><th>Check</th><th>Workload</th><th class="n">Pods</th><th>Detail</th></tr></thead><tbody>` +
@@ -457,12 +570,18 @@ function renderAlerts() {
 }
 
 // ---- feed ----
+let feedShown = null;
+function renderFeedMeta() {
+  const s = state && state.summary;
+  const tot = s ? `<b>${n(s.pisentry_events + s.falco_events)}</b> events 24h · pisentry <b>${n(s.pisentry_events)}</b>, Falco <b>${n(s.falco_events)}</b>` : '';
+  $('feedMeta').innerHTML = [tot, feedShown == null ? '' : `${n(feedShown)} shown`].filter(Boolean).join(' · ');
+}
 async function fetchFeed() {
   try {
     const res = await fetch(`/api/events?source=${encodeURIComponent(feedSrc)}&severity=${encodeURIComponent(feedSev)}&limit=200&t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(res.status);
     const evs = await res.json();
-    $('feedMeta').textContent = `${evs.length} shown, 24h`;
+    feedShown = evs.length; renderFeedMeta();
     $('feed').innerHTML = evs.length ? evs.map(e => {
       const k = 'e:' + e.id, o = open.has(k);
       const where = [e.host, e.namespace ? `${e.namespace}/${e.pod || ''}` : ''].filter(Boolean).join(' · ');
@@ -489,7 +608,7 @@ document.addEventListener('click', e => {
 
 // ---- loop ----
 function renderAll() {
-  renderStatus(); renderTiles(); renderAttention(); renderHosts(); renderFalco(); renderVulns(); renderPosture(); renderAlerts();
+  renderStatus(); renderTiles(); renderTrend(); renderAttention(); renderHosts(); renderFalco(); renderVulns(); renderPosture(); renderAlerts(); renderFeedMeta();
 }
 async function fetchState() {
   try {
