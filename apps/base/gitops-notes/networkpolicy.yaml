@@ -1,0 +1,92 @@
+---
+# The nginx pods face the internet through cloudflared, so they are boxed in.
+# Only cloudflared in this namespace may talk to them, and the only thing
+# they may talk to is cluster DNS. A compromised web pod cannot reach other
+# namespaces, the Kubernetes API, the home LAN or the internet.
+# k3s enforces NetworkPolicy with its embedded kube-router controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gitops-notes-web
+  namespace: gitops-notes
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gitops-notes
+      app.kubernetes.io/component: web
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudflared
+              app.kubernetes.io/part-of: gitops-notes
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# cloudflared only dials out: to the Cloudflare edge, to cluster DNS and to
+# the nginx pods. Private ranges are excluded from the internet rule so the
+# tunnel pod cannot be used as a hop into other namespaces or the home LAN.
+# Ingress is left open so the kubelet can probe port 2000.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gitops-notes-cloudflared
+  namespace: gitops-notes
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+      app.kubernetes.io/part-of: gitops-notes
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gitops-notes
+              app.kubernetes.io/component: web
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        # QUIC and HTTP/2 to the Cloudflare edge, plus HTTPS for the API.
+        - protocol: UDP
+          port: 7844
+        - protocol: TCP
+          port: 7844
+        - protocol: TCP
+          port: 443

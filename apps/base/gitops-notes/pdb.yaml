@@ -1,0 +1,25 @@
+---
+# Two replicas each, and a node drain may take down only one at a time.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gitops-notes-web
+  namespace: gitops-notes
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gitops-notes
+      app.kubernetes.io/component: web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gitops-notes-cloudflared
+  namespace: gitops-notes
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+      app.kubernetes.io/part-of: gitops-notes

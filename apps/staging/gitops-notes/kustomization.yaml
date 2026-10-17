@@ -1,0 +1,8 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base/gitops-notes
+  # Create this from secret.yaml.example and SOPS-encrypt it before the first
+  # commit. cloudflared cannot start without it.
+  - secret.yaml

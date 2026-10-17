@@ -1,0 +1,109 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitops-notes
+  namespace: gitops-notes
+  labels:
+    app.kubernetes.io/name: gitops-notes
+    app.kubernetes.io/component: web
+    app.kubernetes.io/part-of: gitops-notes
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gitops-notes
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gitops-notes
+        app.kubernetes.io/component: web
+        app.kubernetes.io/part-of: gitops-notes
+    spec:
+      # nginx never talks to the Kubernetes API, so it gets no token and no
+      # service environment variables.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      # The image is multi-arch, so spread the two replicas across nodes.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gitops-notes
+              app.kubernetes.io/component: web
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: [amd64, arm64]
+      containers:
+        - name: nginx
+          # sha-<short commit> tag from the "Container image" workflow in the
+          # gitops-notes repo. Bump it here to roll out a new post.
+          image: ghcr.io/mrguato/gitops-notes:sha-f0ce8ff
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          # The only paths nginx-unprivileged writes: the pid file and temp
+          # directories under /tmp, and the proxy cache directory.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /var/cache/nginx
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 32Mi

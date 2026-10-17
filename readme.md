@@ -92,6 +92,7 @@ Inspired by **[Mischa van den Burg](https://mischavandenburg.com/)** and real-wo
 | **Renovate** | Dependency Updates | renovate | Running |
 | **Cloudflare Tunnels** | Ingress | per-namespace | Running |
 | **Status Dashboard** | Monitoring | cluster-dashboard | Running |
+| **GitOps Notes** | Blog, public hostname | gitops-notes | Running |
 
 ---
 
