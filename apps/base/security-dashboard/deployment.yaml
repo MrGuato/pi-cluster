@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-dashboard
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # the PVC is ReadWriteOnce
+  selector:
+    matchLabels:
+      app: security-dashboard
+  template:
+    metadata:
+      labels:
+        app: security-dashboard
+    spec:
+      serviceAccountName: security-dashboard
+      # arm64 image, like cluster-dashboard. Trivy needs up to 1 GiB while it
+      # scans the larger images, so prefer the 8 GB control plane node over
+      # the 2 GB and 4 GB workers.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: ["arm64"]
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: ["kubepi"]
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: server
+          image: ghcr.io/mrguato/security-dashboard:v0.1.0
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: ingest
+              containerPort: 8081
+          env:
+            - name: DATA_DIR
+              value: /data
+            # Set both to require a Cloudflare Access login on every request
+            # (see apps/staging/security-dashboard). Empty means open.
+            - name: CF_ACCESS_TEAM
+              value: ""
+            - name: CF_ACCESS_AUD
+              value: ""
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+
+        - name: trivy
+          image: docker.io/aquasec/trivy:0.76.0
+          command: ["/bin/sh", "/scripts/scan.sh"]
+          env:
+            - name: HOME
+              value: /tmp
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: scanner
+              mountPath: /scripts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: security-dashboard-data
+        - name: scanner
+          configMap:
+            name: security-dashboard-scanner
+            defaultMode: 0555
+        - name: tmp
+          emptyDir: {}

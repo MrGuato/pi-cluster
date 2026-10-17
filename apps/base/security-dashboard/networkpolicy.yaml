@@ -1,0 +1,33 @@
+# The page shows source IPs, command lines and CVE lists, so nothing in the
+# cluster may read it except the tunnel pods. Ingest accepts only the two
+# agents. k3s enforces this with its embedded kube-router controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: security-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app: security-dashboard
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cluster-dashboard
+          podSelector:
+            matchLabels:
+              app: cloudflared
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: falco
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: pisentry
+      ports:
+        - protocol: TCP
+          port: 8081

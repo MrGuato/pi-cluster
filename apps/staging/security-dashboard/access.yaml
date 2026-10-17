@@ -1,0 +1,20 @@
+# Cloudflare Access on every request, on top of the tunnel. Fill in after
+# creating the Access application for the hostname (Zero Trust > Access >
+# Applications > Self-hosted, policy: one-time PIN for your email):
+#   CF_ACCESS_TEAM  the team name, the part before .cloudflareaccess.com
+#   CF_ACCESS_AUD   the application's Audience (AUD) tag from its overview
+# While both are empty the server answers anyone the tunnel lets through.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-dashboard
+spec:
+  template:
+    spec:
+      containers:
+        - name: server
+          env:
+            - name: CF_ACCESS_TEAM
+              value: ""
+            - name: CF_ACCESS_AUD
+              value: ""

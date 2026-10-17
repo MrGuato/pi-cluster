@@ -1,0 +1,13 @@
+# Events (30 days), acknowledgements, the KEV cache and Trivy's database and
+# reports. Longhorn so the pod can move between arm64 nodes.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: security-dashboard-data
+spec:
+  storageClassName: longhorn
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi

@@ -75,6 +75,14 @@ data:
     file_output:
       enabled: false
 
+    # Every alert is also posted as JSON to the security dashboard. The
+    # ingest Service is not routed through the tunnel and its NetworkPolicy
+    # only admits this namespace.
+    http_output:
+      enabled: true
+      url: http://security-dashboard-ingest.security-dashboard.svc.cluster.local:8081/ingest/falco
+      keep_alive: true
+
     priority: WARNING
 
     json_output: true

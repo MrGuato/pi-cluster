@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: security-dashboard-scanner
+data:
+  # Runs in the Trivy sidecar. The server writes /data/scan/images.txt (one
+  # image reference per line, every running container); this loop scans each
+  # one and leaves JSON reports in /data/scan/reports for the server to read.
+  # A report younger than RESCAN_AFTER is kept, so a pod restart does not
+  # start the whole list again. Failures leave <hash>.err with the image on
+  # the first line and trivy's last lines after it.
+  scan.sh: |
+    #!/bin/sh
+    set -u
+    LIST=/data/scan/images.txt
+    OUT=/data/scan/reports
+    STATUS=/data/scan/status
+    RESCAN_AFTER=${RESCAN_AFTER:-720}   # minutes
+    SLEEP=${SLEEP:-1800}                # seconds between passes
+    mkdir -p "$OUT" /data/scan/cache
+    export TRIVY_CACHE_DIR=/data/scan/cache
+    echo "[scan] trivy $(trivy --version 2>/dev/null | head -1), rescan after ${RESCAN_AFTER}m"
+    while true; do
+      if [ ! -s "$LIST" ]; then
+        echo "[scan] waiting for $LIST"; sleep 60; continue
+      fi
+      cp "$LIST" /tmp/images.txt
+      # drop reports for images that no longer run
+      : > /tmp/keep.txt
+      while IFS= read -r img; do
+        [ -n "$img" ] && printf '%s\n' "$(printf '%s' "$img" | sha1sum | cut -c1-16)" >> /tmp/keep.txt
+      done < /tmp/images.txt
+      for f in "$OUT"/*.json "$OUT"/*.err; do
+        [ -e "$f" ] || continue
+        h=$(basename "$f"); h=${h%.*}
+        grep -qx "$h" /tmp/keep.txt || rm -f "${OUT:?}/${h:?}.json" "${OUT:?}/${h:?}.err"
+      done
+      n=0; skipped=0
+      while IFS= read -r img; do
+        [ -n "$img" ] || continue
+        h=$(printf '%s' "$img" | sha1sum | cut -c1-16)
+        if [ -n "$(find "$OUT" -maxdepth 1 -name "$h.json" -mmin "-$RESCAN_AFTER" 2>/dev/null)" ]; then
+          skipped=$((skipped+1)); continue
+        fi
+        printf '%s' "$img" > "$STATUS"
+        if trivy image --scanners vuln --format json --quiet --timeout 15m -o "$OUT/$h.json.tmp" "$img" > /tmp/trivy.log 2>&1; then
+          mv "$OUT/$h.json.tmp" "$OUT/$h.json"
+          rm -f "${OUT:?}/${h:?}.err"
+          echo "[scan] ok   $img"
+        else
+          rm -f "${OUT:?}/${h:?}.json.tmp"
+          { printf '%s\n' "$img"; tail -n 5 /tmp/trivy.log; } > "$OUT/$h.err"
+          echo "[scan] FAIL $img: $(tail -n 1 /tmp/trivy.log)"
+        fi
+        n=$((n+1))
+      done < /tmp/images.txt
+      : > "$STATUS"
+      echo "[scan] pass done: $n scanned, $skipped fresh; next in ${SLEEP}s"
+      sleep "$SLEEP"
+    done

@@ -1,0 +1,29 @@
+# UI and read API. Only cloudflared (cluster-dashboard namespace) may reach
+# it, see networkpolicy.yaml.
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-dashboard
+spec:
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+  selector:
+    app: security-dashboard
+  type: ClusterIP
+---
+# Ingest for Falco http_output and the pisentry webhook. Never routed
+# through the tunnel.
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-dashboard-ingest
+spec:
+  ports:
+    - name: ingest
+      port: 8081
+      targetPort: ingest
+  selector:
+    app: security-dashboard
+  type: ClusterIP
