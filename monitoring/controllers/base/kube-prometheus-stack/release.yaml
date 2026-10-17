@@ -28,6 +28,19 @@ spec:
           kind: PrometheusRule
 
   values:
+    # k3s runs kube-proxy, the scheduler and the controller-manager inside
+    # the k3s-server process with metrics on loopback only, and stores
+    # state in sqlite (kine), not etcd. The chart's scrape targets for
+    # them can never resolve, so their *Down alerts fire permanently.
+    kubeProxy:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeControllerManager:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+
     grafana:
       admin:
         existingSecret: grafana-admin
