@@ -1,0 +1,13 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitops-notes
+  labels:
+    app.kubernetes.io/name: gitops-notes
+    app.kubernetes.io/part-of: gitops-notes
+    # Pod Security Admission: nothing in this namespace may run outside the
+    # restricted profile. The hostname is public, so the pods get no slack.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

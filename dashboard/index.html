@@ -236,7 +236,7 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
 
 <script>
 'use strict';
-const VERSION = 'v5.1.0';
+const VERSION = 'v5.2.0';
 const METRICS_EVERY = 30000, HISTORY_EVERY = 300000, STALE_AFTER = 150;
 const PISENTRY_STALE = 12 * 3600; // slowest pisentry detectors run every 6h
 
@@ -248,6 +248,7 @@ const GROUPS = {
   'docmost':         { title: 'Docmost',           desc: 'Wiki',                order: 13 },
   'forgejo':         { title: 'Forgejo',           desc: 'Git hosting',         order: 14 },
   'headlamp':        { title: 'Headlamp',          desc: 'Kubernetes UI',       order: 15 },
+  'gitops-notes':    { title: 'GitOps Notes',      desc: 'Blog',                order: 16 },
   'monitoring':      { title: 'Observability',     desc: 'Prometheus, Grafana', order: 30 },
   'longhorn-system': { title: 'Longhorn',          desc: 'Block storage',       order: 31 },
   'velero':          { title: 'Velero',            desc: 'Backups',             order: 32 },
