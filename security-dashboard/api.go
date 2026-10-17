@@ -66,22 +66,25 @@ func (a *API) state(w http.ResponseWriter, r *http.Request) {
 			pisWorst = h.Worst24h
 		}
 	}
-	kevHits, critFix, scanned := 0, 0, 0
-	for _, img := range scan.Images {
+	red, redNewest := c.History.RedDays()
+	today := time.Now().UTC().Format(dayFormat)
+	kevHits, critFix, scanned, redImages := 0, 0, 0, 0
+	for i := range scan.Images {
+		img := &scan.Images[i]
 		kevHits += len(img.KEV)
-		critFix += countFixable(img.Top, "critical")
+		if n := countFixable(img.Top, "critical"); n > 0 {
+			critFix += n
+			redImages++
+			img.RedDays = red[img.Image]
+			if redNewest != today {
+				img.RedDays++ // no snapshot yet today; it is red now
+			}
+		}
 		if !img.ScannedAt.IsZero() {
 			scanned++
 		}
 	}
-	open, openBySev := 0, map[string]int{}
-	for _, it := range att {
-		if _, ok := acks[it.ID]; ok || sevRank(it.Severity) < sevRank("medium") {
-			continue
-		}
-		open++
-		openBySev[it.Severity]++
-	}
+	open, openBySev := openCounts(att, acks)
 	writeJSON(w, map[string]any{
 		"timestamp": time.Now().UTC(),
 		"version":   version,
@@ -95,6 +98,7 @@ func (a *API) state(w http.ResponseWriter, r *http.Request) {
 			"falco_rules":      len(rules),
 			"kev_hits":         kevHits,
 			"critical_fixable": critFix,
+			"red_images":       redImages,
 			"images":           len(scan.Images),
 			"images_scanned":   scanned,
 			"stored_events":    a.Store.Len(),
@@ -112,6 +116,7 @@ func (a *API) state(w http.ResponseWriter, r *http.Request) {
 		"alerts":    map[string]any{"items": alerts, "error": alertErr},
 		"attention": att,
 		"acks":      acks,
+		"history":   map[string]any{"days": historyDays, "events": a.Store.Daily(historyDays), "snapshots": c.History.Snapshots()},
 	})
 }
 

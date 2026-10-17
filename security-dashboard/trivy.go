@@ -252,9 +252,8 @@ func (c *Collector) Scan() ScanState {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	st := c.scan
-	if st.Images == nil {
-		st.Images = []ImageVulns{}
-	}
+	// Copy the slice so callers can annotate rows without racing readScans.
+	st.Images = append([]ImageVulns{}, st.Images...)
 	return st
 }
 

@@ -22,6 +22,7 @@ const window = 24 * time.Hour
 // store through the API and are aggregated here on read.
 type Collector struct {
 	Store        *Store
+	History      *History
 	Kube         *Kube
 	Log          *slog.Logger
 	PisentryNS   string
@@ -133,6 +134,16 @@ func (c *Collector) Run(ctx context.Context) {
 	go c.loop(ctx, 60*time.Second, c.pollAlerts)
 	go c.loop(ctx, 2*time.Minute, c.readScans)
 	go c.loop(ctx, 24*time.Hour, c.fetchKEV)
+	go func() {
+		// Give the first scan read and pod list a moment, then keep the
+		// daily history current. One point per UTC day survives.
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(45 * time.Second):
+		}
+		c.loop(ctx, 10*time.Minute, c.snapshot)
+	}()
 	<-ctx.Done()
 }
 
