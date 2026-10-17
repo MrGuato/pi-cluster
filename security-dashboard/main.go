@@ -26,7 +26,7 @@ import (
 //go:embed web/index.html
 var web embed.FS
 
-const version = "v0.1.0"
+const version = "v0.1.1"
 
 func main() {
 	fs := flag.NewFlagSet("security-dashboard", flag.ExitOnError)

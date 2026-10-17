@@ -44,6 +44,10 @@ spec:
       # ── Host namespaces ─────────────────────────────────────────
       hostPID: true
       hostNetwork: true
+      # With hostNetwork the pod would use the node's resolver, which knows
+      # nothing about Services. This keeps cluster DNS so http_output can
+      # reach the security dashboard by its Service name.
+      dnsPolicy: ClusterFirstWithHostNet
 
       containers:
         - name: falco

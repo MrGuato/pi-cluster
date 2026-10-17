@@ -17,6 +17,6 @@ spec:
         - name: server
           env:
             - name: CF_ACCESS_TEAM
-              value: ""
+              value: deleonfamily
             - name: CF_ACCESS_AUD
-              value: ""
+              value: 7037edd0d619cd49cdc129433e311a4c098baf68fcd61e419c240ef0e51b33ee
