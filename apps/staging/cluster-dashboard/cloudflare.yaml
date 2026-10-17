@@ -67,4 +67,8 @@ data:
     ingress:
       - hostname: status.deleontech.net
         service: http://cluster-dashboard:3000
+      # Security dashboard shares this tunnel. Put a Cloudflare Access
+      # application with a one-time PIN policy in front of the hostname.
+      - hostname: security.deleontech.net
+        service: http://security-dashboard.security-dashboard.svc.cluster.local:3000
       - service: http_status:404
