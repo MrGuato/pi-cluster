@@ -65,19 +65,28 @@ spec:
             - name: metrics
               containerPort: 9817
               protocol: TCP
+          # A Pi under disk load can take seconds to answer. A 1s timeout
+          # killed pisentry on kubepi hundreds of times, and each restart
+          # re-ran the full filesystem scan.
           livenessProbe:
             httpGet:
               path: /healthz
               port: metrics
             initialDelaySeconds: 10
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
           resources:
             requests:
               cpu: 10m
               memory: 24Mi
+            # The process itself stays under 60Mi. The kernel also charges
+            # the dentry/inode cache from the SUID and FIM walks to this
+            # cgroup; at 96Mi that cache filled the limit on kubepi and the
+            # constant reclaim pushed pisentry's own pages back to the SD card.
             limits:
               cpu: 200m
-              memory: 96Mi
+              memory: 256Mi
           securityContext:
             # Be honest about the blast radius: hostPID + SYS_PTRACE + an
             # unconfined LSM profile means a compromised pisentry is effectively
