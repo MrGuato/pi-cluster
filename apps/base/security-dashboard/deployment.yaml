@@ -86,7 +86,7 @@ spec:
               mountPath: /data
 
         - name: trivy
-          image: docker.io/aquasec/trivy:0.76.0
+          image: docker.io/aquasec/trivy:0.76.1
           command: ["/bin/sh", "/scripts/scan.sh"]
           env:
             - name: HOME
