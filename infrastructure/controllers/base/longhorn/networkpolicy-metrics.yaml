@@ -1,0 +1,23 @@
+# The chart's longhorn-manager NetworkPolicy only admits Longhorn's own pods, so
+# Prometheus scrapes of :9500/metrics are rejected ("connection refused") and the
+# longhorn-backend targets show down. Policies are additive; this opens just the
+# metrics port to the monitoring namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: longhorn-manager-metrics
+  namespace: longhorn-system
+spec:
+  podSelector:
+    matchLabels:
+      app: longhorn-manager
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9500
