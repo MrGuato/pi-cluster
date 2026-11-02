@@ -68,12 +68,38 @@ section{margin-bottom:32px}
 .sp-line{fill:none;stroke:var(--info);stroke-width:1.5;vector-effect:non-scaling-stroke}
 .sp-area{fill:var(--info);opacity:.1}
 
-.flow{display:flex;overflow-x:auto}
-.step{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);padding:10px 12px}
-.step + .step{margin-left:-1px}
+/* Pipeline: a packet hops git -> edge every --T; each step lights as it arrives. */
+.pipe{padding:16px;--T:6.6s;--hop:1.2s}
+.flow{display:flex;align-items:stretch}
+.step{flex:1 1 0;min-width:0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;animation:lit var(--T) ease-out infinite;animation-delay:calc(var(--i) * var(--hop))}
 .step small{display:block;font:11px var(--mono);color:var(--text-3)}
 .step b{display:block;font:600 13px var(--mono);margin:2px 0}
-.step span{font-size:11px;color:var(--text-2)}
+.step span{display:block;font-size:11px;color:var(--text-2)}
+.step em{display:flex;align-items:center;gap:5px;font:normal 11px var(--mono);color:var(--text-3);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step em a{color:var(--text-2);text-decoration:none}.step em a:hover{text-decoration:underline}
+.step em .dot{width:6px;height:6px}
+.arrow{flex:0 0 34px;position:relative;align-self:center;height:14px}
+.arrow::before{content:'';position:absolute;left:3px;right:6px;top:6px;height:2px;background:repeating-linear-gradient(90deg,var(--border-2) 0 5px,transparent 5px 9px);background-size:9px 2px;animation:dash .9s linear infinite}
+.arrow::after{content:'';position:absolute;right:3px;top:3px;width:6px;height:6px;border-top:2px solid var(--border-2);border-right:2px solid var(--border-2);transform:rotate(45deg)}
+.arrow i{position:absolute;left:0;top:3px;width:8px;height:8px;border-radius:50%;background:var(--info);box-shadow:0 0 10px 2px var(--info);opacity:0;animation:hop var(--T) linear infinite;animation-delay:calc(var(--i) * var(--hop) + .25s)}
+@keyframes lit{0%{border-color:var(--info);box-shadow:0 0 0 1px var(--info),0 0 18px -4px var(--info)}16%,100%{border-color:var(--border);box-shadow:0 0 0 0 transparent}}
+@keyframes hop{0%{left:0;opacity:0}2%{opacity:1}13%{left:calc(100% - 8px);opacity:1}15%,100%{left:calc(100% - 8px);opacity:0}}
+@keyframes hopv{0%{top:0;opacity:0}2%{opacity:1}13%{top:calc(100% - 8px);opacity:1}15%,100%{top:calc(100% - 8px);opacity:0}}
+@keyframes dash{to{background-position:9px 0}}
+@keyframes dashv{to{background-position:0 9px}}
+.pushes{margin-top:16px;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.pu-row{display:grid;grid-template-columns:64px minmax(0,1fr) auto;align-items:center;gap:12px}
+.pu-row>small{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--text-3)}
+.pu-sq{display:flex;gap:3px;flex-wrap:wrap;min-width:0}
+.pu-sq i{width:12px;height:12px;border-radius:1px;background:var(--nodata)}
+.pu-sq i.ok{background:var(--ok)}.pu-sq i.bad{background:var(--bad)}.pu-sq i.warn{background:var(--warn)}
+.pu-sq i.new{animation:ping 2.4s ease-out infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 var(--ok)}70%,100%{box-shadow:0 0 0 6px transparent}}
+.pu-n{font:12px var(--mono);color:var(--text-2);white-space:nowrap;text-align:right}
+.pu-n b{color:var(--text);font-weight:600}
+.pu-last{font:11px var(--mono);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pu-last a{color:var(--text-2)}
+@media (prefers-reduced-motion: reduce){.step,.arrow i,.arrow::before,.pu-sq i.new{animation:none}}
 
 .nodes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .node{padding:16px}
@@ -96,28 +122,29 @@ section{margin-bottom:32px}
 .n-strip{margin-top:10px}
 .c-ok{fill:var(--ok)}.c-warn{fill:var(--warn)}.c-bad{fill:var(--bad)}.c-na{fill:var(--nodata)}
 
-.svcs{display:flex;flex-direction:column;gap:8px}
-.svc{padding:12px 16px}
-.s-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.s-main{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 220px}
-.s-name{font-weight:600;font-size:14px}
-.s-ns{font:11px var(--mono);color:var(--text-3);margin-left:8px}
-.s-desc{font-size:12px;color:var(--text-3)}
-.s-parts{display:flex;gap:6px;flex-wrap:wrap}
+.svcs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.svc{padding:12px 14px;display:flex;flex-direction:column}
+.s-top{display:flex;align-items:center;gap:8px;min-width:0}
+.s-name{font-weight:600;font-size:14px;white-space:nowrap}
+.s-ns{font:11px var(--mono);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-desc{font-size:12px;color:var(--text-3);margin:3px 0 0 16px}
+.s-parts{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0 16px}
 .chip{font:11px var(--mono);padding:2px 7px;border:1px solid var(--border);border-radius:var(--r);color:var(--text-2);background:var(--surface-2);white-space:nowrap}
 .chip.bad{border-color:var(--bad);color:var(--bad)}.chip.warn{border-color:var(--warn);color:var(--warn)}
-.s-pct{font:600 13px var(--mono);min-width:64px;text-align:right}
-.s-strip{display:flex;align-items:center;gap:8px;margin-top:10px}
-.s-strip .strip{flex:1;min-width:0;height:20px}
+.s-pct{font:600 13px var(--mono);margin-left:auto;padding-left:8px;white-space:nowrap}
+.s-strip{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:10px}
+.s-strip .strip{flex:1;min-width:0;height:14px}
 .s-strip span{font:10px var(--mono);color:var(--text-3);white-space:nowrap}
 .legend{display:flex;gap:12px;font:11px var(--mono);color:var(--text-3)}
 .legend i{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:-1px}
 
 .plat{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border)}
 .prow{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--surface);padding:10px 14px;font-size:13px}
+.prow .pk{display:flex;flex-direction:column;min-width:0;flex:1 1 55%}
 .prow .k{color:var(--text-2)}
-.prow .v{font:600 13px var(--mono);text-align:right}
-.prow .v small{font-weight:400;color:var(--text-3);margin-left:6px}
+.prow .d{font-size:11px;color:var(--text-3);line-height:1.4;margin-top:1px}
+.prow .v{font:600 13px var(--mono);text-align:right;flex:0 1 45%;min-width:0}
+.prow .v small{display:block;font-weight:400;font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.4}
 
 .sec{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .sec-live{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -144,14 +171,19 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
 .ver{font:11px var(--mono);color:var(--text-3);margin-top:2px}
 .empty{padding:14px 16px;font:12px var(--mono);color:var(--text-3)}
 
-@media(max-width:900px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.sec{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.sec{grid-template-columns:repeat(2,minmax(0,1fr))}.arrow{flex-basis:22px}}
 @media(max-width:640px){
   .wrap{padding:24px 16px 40px}
   .hdr{margin-bottom:20px}.hdr h1{font-size:24px}
   .hdr-r{align-items:flex-start;flex-direction:row;flex-wrap:wrap;gap:12px 20px}
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .nodes,.sec,.plat{grid-template-columns:minmax(0,1fr)}
-  .s-main{flex:1 1 100%}.s-pct{min-width:0;margin-left:auto}
+  .nodes,.sec,.plat,.svcs{grid-template-columns:minmax(0,1fr)}
+  .flow{flex-direction:column}
+  .arrow{flex:0 0 26px;width:14px;height:auto}
+  .arrow::before{left:6px;right:auto;top:3px;bottom:6px;width:2px;height:auto;background:repeating-linear-gradient(180deg,var(--border-2) 0 5px,transparent 5px 9px);background-size:2px 9px;animation-name:dashv}
+  .arrow::after{right:auto;left:3px;top:auto;bottom:3px;transform:rotate(135deg)}
+  .arrow i{left:3px;top:0;animation-name:hopv}
+  .pu-row{grid-template-columns:minmax(0,1fr) auto}.pu-row>small{grid-column:1/-1}
 }
 </style>
 </head>
@@ -188,7 +220,10 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
 
   <section>
     <div class="sec-h"><h2>Pipeline</h2><span class="meta">git to edge</span></div>
-    <div class="flow" id="flow"></div>
+    <div class="card pipe">
+      <div class="flow" id="flow"></div>
+      <div class="pushes" id="pushes"></div>
+    </div>
   </section>
 
   <section>
@@ -236,25 +271,26 @@ footer nav a:hover{color:var(--text);border-color:var(--border-2)}
 
 <script>
 'use strict';
-const VERSION = 'v5.2.0';
+const VERSION = 'v5.3.0';
 const METRICS_EVERY = 30000, HISTORY_EVERY = 300000, STALE_AFTER = 150;
 const PISENTRY_STALE = 12 * 3600; // slowest pisentry detectors run every 6h
 
 // Namespace to display mapping. Unknown namespaces still render, using the namespace as the title.
 const GROUPS = {
-  'vikunja':         { title: 'Vikunja',           desc: 'Tasks',               order: 10 },
-  'linkding':        { title: 'Linkding',          desc: 'Bookmarks',           order: 11 },
-  'obsidian-sync':   { title: 'Obsidian LiveSync', desc: 'Notes sync',          order: 12 },
-  'docmost':         { title: 'Docmost',           desc: 'Wiki',                order: 13 },
-  'forgejo':         { title: 'Forgejo',           desc: 'Git hosting',         order: 14 },
-  'headlamp':        { title: 'Headlamp',          desc: 'Kubernetes UI',       order: 15 },
-  'gitops-notes':    { title: 'GitOps Notes',      desc: 'Blog',                order: 16 },
-  'monitoring':      { title: 'Observability',     desc: 'Prometheus, Grafana', order: 30 },
-  'longhorn-system': { title: 'Longhorn',          desc: 'Block storage',       order: 31 },
-  'velero':          { title: 'Velero',            desc: 'Backups',             order: 32 },
-  'falco':           { title: 'Falco',             desc: 'Runtime detection',   order: 33 },
-  'pisentry':        { title: 'pisentry',          desc: 'Host security agent', order: 34 },
-  'flux-system':     { title: 'FluxCD',            desc: 'GitOps controllers',  order: 35 },
+  'vikunja':            { title: 'Vikunja',            desc: 'Tracks tasks and projects with lists, due dates and labels.',      order: 10 },
+  'linkding':           { title: 'Linkding',           desc: 'Saves and tags bookmarks with full text search.',                  order: 11 },
+  'obsidian-sync':      { title: 'Obsidian LiveSync',  desc: 'CouchDB backend that syncs Obsidian notes across devices.',        order: 12 },
+  'docmost':            { title: 'Docmost',            desc: 'Wiki for docs and runbooks, backed by Postgres and Redis.',        order: 13 },
+  'forgejo':            { title: 'Forgejo',            desc: 'Self hosted Git forge for repos, issues and mirrors.',             order: 14 },
+  'headlamp':           { title: 'Headlamp',           desc: 'Web UI for browsing and inspecting the cluster.',                  order: 15 },
+  'gitops-notes':       { title: 'GitOps Notes',       desc: 'Astro blog with homelab writeups, served through a tunnel.',       order: 16 },
+  'security-dashboard': { title: 'Security dashboard', desc: 'Private security view behind Cloudflare Access with a one time PIN.', order: 17 },
+  'monitoring':         { title: 'Observability',      desc: 'Prometheus scrapes metrics, Grafana charts them, Alertmanager pages.', order: 30 },
+  'longhorn-system':    { title: 'Longhorn',           desc: 'Replicates block storage for persistent volumes across nodes.',    order: 31 },
+  'velero':             { title: 'Velero',             desc: 'Backs up cluster state and volume data to off cluster MinIO.',     order: 32 },
+  'falco':              { title: 'Falco',              desc: 'Watches syscalls on the x86 node for shells and container escapes.', order: 33 },
+  'pisentry':           { title: 'pisentry',           desc: 'Host agent on every node that flags logins, listeners and processes.', order: 34 },
+  'flux-system':        { title: 'FluxCD',             desc: 'Pulls main from GitHub and applies it to the cluster.',            order: 35 },
 };
 const HIDE_NS = new Set(['kube-system', 'cluster-dashboard']);
 const HIDE_WL = /^(csi-|engine-image-|longhorn-driver-deployer|svclb-|kube-prometheus-stack-(operator|kube-state-metrics)$)/;
@@ -267,12 +303,13 @@ const SHORT = {
 // CI job names as shown in the PR security review card.
 const JOB_SHORT = { 'claude-review': 'claude review', 'kustomize-build': 'kustomize', 'plaintext-credentials': 'credential scan' };
 const FLOW = [
-  { n: '01', label: 'Git push',   sub: 'pull request, review, merge' },
-  { n: '02', label: 'FluxCD',     sub: 'reconcile main' },
-  { n: '03', label: 'SOPS',       sub: 'decrypt with age in cluster' },
-  { n: '04', label: 'k3s',        sub: 'apply' },
-  { n: '05', label: 'Cloudflare', sub: 'tunnel and access' },
+  { id: 'git',  n: '01', label: 'Git push',   sub: 'pull request, review, merge' },
+  { id: 'flux', n: '02', label: 'FluxCD',     sub: 'reconcile main' },
+  { id: 'sops', n: '03', label: 'SOPS',       sub: 'decrypt with age in cluster' },
+  { id: 'k3s',  n: '04', label: 'k3s',        sub: 'apply' },
+  { id: 'edge', n: '05', label: 'Cloudflare', sub: 'tunnel and access' },
 ];
+const REPO_URL = 'https://github.com/MrGuato/pi-cluster';
 const STACK = [
   ['Runtime', 'k3s'], ['GitOps', 'FluxCD'], ['Secrets', 'SOPS + age'], ['Ingress', 'Cloudflare Tunnel'],
   ['Proxy', 'Traefik'], ['Metrics', 'Prometheus'], ['Dashboards', 'Grafana'], ['Storage', 'Longhorn'],
@@ -319,6 +356,15 @@ function pctOf(series) {
 }
 const fmtPct = p => p == null ? 'n/a' : (p >= 99.995 ? '100%' : p.toFixed(2) + '%');
 const shortName = n => SHORT[n] || n;
+// Drops the ReplicaSet and pod hash: longhorn-ui-5f6d8c7b9-x2k4p -> longhorn-ui.
+const shortPod = p => p.replace(/-[a-z0-9]{6,10}-[a-z0-9]{5}$/, '').replace(/-[a-z0-9]{5}$/, '');
+// Nodes that booted inside the restart window, so their pods restarted with them.
+const rebooted = () => (M && M.nodes || []).filter(n => n.uptime_seconds < 86400).map(n => n.name);
+const semverCmp = (a, b) => {
+  const pa = a.replace(/^v/, '').split('.').map(Number), pb = b.replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  return 0;
+};
 
 // ---- svg ----
 function spark(svg, vals) {
@@ -370,7 +416,9 @@ $('themeSeg').addEventListener('click', e => {
 });
 
 // ---- static sections ----
-$('flow').innerHTML = FLOW.map(s => `<div class="step"><small>${s.n}</small><b>${esc(s.label)}</b><span>${esc(s.sub)}</span></div>`).join('');
+$('flow').innerHTML = FLOW.map((s, i) =>
+  (i ? `<div class="arrow" style="--i:${i - 1}" aria-hidden="true"><i></i></div>` : '')
+  + `<div class="step" style="--i:${i}"><small>${s.n}</small><b>${esc(s.label)}</b><span>${esc(s.sub)}</span><em data-st="${s.id}">&nbsp;</em></div>`).join('');
 $('stack').innerHTML = STACK.map(([c, n]) => `<span class="pill"><small>${esc(c)}</small>${esc(n)}</span>`).join('');
 $('version').textContent = VERSION;
 
@@ -447,10 +495,12 @@ function renderTiles(groups) {
   $('tAvail').className = 't-v ' + (avail == null ? 'dim' : avail >= 99.9 ? '' : avail >= 99 ? 'warn' : 'bad');
   $('tAvailSub').textContent = pcts.length ? `7 days, ${pcts.length} services` : '7 days';
   if (H) {
+    const boots = rebooted();
     $('tRestarts').textContent = H.restarts_24h ?? '-';
-    $('tRestarts').className = 't-v ' + ((H.restarts_24h || 0) > 20 ? 'warn' : '');
+    const live = H.restarts_1h || 0;
+    $('tRestarts').className = 't-v ' + (live > 2 || ((H.restarts_24h || 0) > 20 && !boots.length) ? 'warn' : '');
     const top = (H.restarts_top || [])[0];
-    $('tRestartsSub').textContent = top ? `${top.namespace}: ${top.count}` : 'last 24 hours';
+    $('tRestartsSub').textContent = live > 2 ? `${live} in the last hour` : boots.length ? `24h, ${boots.length} node reboot${boots.length > 1 ? 's' : ''}` : top ? `${top.namespace}: ${top.count}` : 'last 24 hours';
     spark($('sCpu'), H.day.cluster.cpu);
     spark($('sMem'), H.day.cluster.mem);
     spark($('sPods'), H.day.cluster.pods);
@@ -508,11 +558,9 @@ function renderServices(groups) {
     }).join('');
     const pctCls = g.pct == null ? 'dim' : g.pct >= 99.9 ? '' : g.pct >= 99 ? 'warn' : 'bad';
     return `<div class="card svc" data-ns="${esc(g.ns)}">
-      <div class="s-row">
-        <div class="s-main"><span class="dot ${g.state}"></span><div><div><span class="s-name">${esc(g.meta.title)}</span><span class="s-ns">${esc(g.ns)}</span></div>${g.meta.desc ? `<div class="s-desc">${esc(g.meta.desc)}</div>` : ''}</div></div>
-        <div class="s-parts">${chips}</div>
-        <div class="s-pct ${pctCls}">${fmtPct(g.pct)}</div>
-      </div>
+      <div class="s-top"><span class="dot ${g.state}"></span><span class="s-name">${esc(g.meta.title)}</span><span class="s-ns">${esc(g.ns)}</span><span class="s-pct ${pctCls}">${fmtPct(g.pct)}</span></div>
+      ${g.meta.desc ? `<div class="s-desc">${esc(g.meta.desc)}</div>` : ''}
+      <div class="s-parts">${chips}</div>
       <div class="s-strip"><span>7d</span><svg class="strip" aria-label="hourly availability, 7 days"></svg><span>now</span></div>
     </div>`;
   }).join('');
@@ -525,28 +573,45 @@ function renderServices(groups) {
 function renderPlatform() {
   const el = $('platform'); if (!M) return;
   const rows = [];
-  const row = (k, v, cls = '', small = '') => rows.push(`<div class="prow"><span class="k">${k}</span><span class="v ${cls}">${v}${small ? `<small>${small}</small>` : ''}</span></div>`);
+  const row = (k, desc, v, cls = '', small = '') => rows.push(`<div class="prow"><div class="pk"><span class="k">${k}</span><span class="d">${desc}</span></div><span class="v ${cls}">${v}${small ? `<small>${small}</small>` : ''}</span></div>`);
+  const nodes = M.nodes || [];
   const tOk = M.targets_up === M.targets_total;
-  row('Scrape targets', `${M.targets_up} / ${M.targets_total}`, tOk ? '' : 'warn', tOk ? 'all up' : 'down');
+  const down = (M.targets_down || []).map(d => d.count > 1 ? `${d.job} x${d.count}` : d.job);
+  row('Scrape targets', 'Endpoints Prometheus pulls metrics from. A down one leaves gaps in history.',
+    `${M.targets_up} / ${M.targets_total}`, tOk ? '' : 'warn', tOk ? 'all up' : down.length ? esc('down: ' + down.join(', ')) : 'down');
   const ds = (M.workloads || []).filter(w => w.kind === 'daemonset' && !HIDE_WL.test(w.name));
   const dsBad = ds.filter(w => !w.healthy);
-  row('DaemonSets', `${ds.length - dsBad.length} / ${ds.length}`, dsBad.length ? 'bad' : '', dsBad.length ? esc(dsBad.map(w => `${w.name} ${w.available}/${w.desired}`).join(', ')) : 'ready on every node');
-  const pressure = (M.nodes || []).reduce((a, n) => a + (n.pressure || 0), 0);
-  row('Node pressure', pressure ? `${pressure}` : 'none', pressure ? 'warn' : '', pressure ? 'memory, disk or pid' : '');
-  const kubelets = [...new Set((M.nodes || []).map(n => n.kubelet).filter(Boolean))].sort();
-  row('Kubelet', kubelets.length > 1 ? 'mixed' : esc(kubelets[0] || '-'), kubelets.length > 1 ? 'warn' : '', kubelets.length > 1 ? esc(kubelets.join(', ')) : 'k3s');
+  row('DaemonSets', 'Per node agents for storage, metrics, backups and security.',
+    `${ds.length - dsBad.length} / ${ds.length}`, dsBad.length ? 'bad' : '', dsBad.length ? esc(dsBad.map(w => `${w.name} ${w.available}/${w.desired}`).join(', ')) : 'ready where scheduled');
+  const pressure = nodes.reduce((a, n) => a + (n.pressure || 0), 0);
+  const pressured = nodes.filter(n => n.pressure > 0).map(n => n.name);
+  row('Node pressure', 'Kubelet flags a node low on memory, disk or process IDs and starts evicting pods.',
+    pressure ? `${pressure}` : 'none', pressure ? 'warn' : '', pressure ? esc(pressured.join(', ')) : 'memory, disk and PIDs ok');
+  const kubelets = [...new Set(nodes.map(n => n.kubelet).filter(Boolean))].sort(semverCmp);
+  const newest = kubelets[kubelets.length - 1];
+  const behind = nodes.filter(n => n.kubelet && n.kubelet !== newest);
+  row('Kubelet', 'Kubernetes agent version on each node. Mixed means an upgrade is part way done.',
+    kubelets.length > 1 ? 'mixed' : esc(newest || '-'), kubelets.length > 1 ? 'warn' : '',
+    kubelets.length > 1 ? esc(`${behind.map(n => n.name).join(', ')} on ${[...new Set(behind.map(n => n.kubelet))].join(', ')}, rest on ${newest}`) : 'k3s, every node');
   if (H) {
     const pvOk = H.pv.bound === H.pv.total;
-    row('Persistent volumes', `${H.pv.bound} / ${H.pv.total}`, pvOk ? '' : 'warn', 'bound');
+    row('Persistent volumes', 'Storage claims attached to a real volume. Unbound means an app is waiting on disk.',
+      `${H.pv.bound} / ${H.pv.total}`, pvOk ? '' : 'warn', 'bound');
+    const lhDesc = 'Replica health of Longhorn volumes. Degraded means a copy is missing.';
     if (H.longhorn) {
       const lh = H.longhorn, bad = lh.degraded + lh.faulted;
-      row('Longhorn volumes', `${lh.healthy} / ${lh.total}`, bad ? (lh.faulted ? 'bad' : 'warn') : '', bad ? `${lh.degraded} degraded, ${lh.faulted} faulted` : 'healthy');
+      row('Longhorn volumes', lhDesc, `${lh.healthy} / ${lh.total}`, bad ? (lh.faulted ? 'bad' : 'warn') : '', bad ? `${lh.degraded} degraded, ${lh.faulted} faulted` : 'healthy');
     } else {
-      row('Longhorn volumes', 'n/a', 'dim', 'metrics not scraped');
+      row('Longhorn volumes', lhDesc, 'n/a', 'dim', 'metrics not scraped');
     }
-    row('Renovate', H.renovate_last_success ? ago(H.renovate_last_success) : 'no run', H.renovate_last_success && (Date.now() / 1000 - H.renovate_last_success) > 2 * 86400 ? 'warn' : '', 'last successful run');
-    const top = H.restarts_top || [];
-    row('Restarts 24h', `${H.restarts_24h}`, H.restarts_24h > 20 ? 'warn' : '', top.length ? esc(top.map(t => `${t.pod} ${t.count}`).join(', ')) : 'none');
+    row('Renovate', 'Bot that opens pull requests for new image and chart versions.',
+      H.renovate_last_success ? ago(H.renovate_last_success) : 'no run', H.renovate_last_success && (Date.now() / 1000 - H.renovate_last_success) > 2 * 86400 ? 'warn' : '', 'last successful run');
+    // Reboots explain a burst; restarts still landing in the last hour do not.
+    const top = H.restarts_top || [], boots = rebooted(), live = H.restarts_1h || 0;
+    const topTxt = top.map(t => `${shortPod(t.pod)} ${t.count}`).join(', ');
+    const notes = [live > 2 ? `${live} in the last hour` : '', boots.length ? `${boots.join(', ')} rebooted` : '', topTxt].filter(Boolean);
+    row('Restarts 24h', 'Container restarts over a day. Node reboots and crash loops both count.',
+      `${H.restarts_24h}`, live > 2 ? 'warn' : H.restarts_24h > 20 && !boots.length ? 'warn' : '', esc(notes.join('. ') || 'none'));
   }
   el.innerHTML = rows.join('');
   $('platMeta').textContent = H ? `history ${ago(Date.parse(H.timestamp) / 1000)}` : '';
@@ -577,9 +642,11 @@ function renderSecurity() {
     velero ? `<span class="${bOk ? 'ok' : 'warn'}">velero ${velero.available}/${velero.desired}</span>${agent ? `<span class="${agent.healthy ? 'ok' : 'warn'}">node-agent ${agent.available}/${agent.desired}</span>` : ''}` : '<span class="dim">no data</span>',
     velero ? (bOk ? 'ok' : 'warn') : null);
 
+  // Falco is pinned to amd64: modern_ebpf needs kernel BTF and the Pi kernels ship none.
   const falco = wl('falco', 'falco');
-  card(live, 'Runtime detection', 'Falco on every node watches syscalls for container escapes and shells.',
-    falco ? `<span class="${falco.healthy ? 'ok' : 'bad'}">${falco.available}/${falco.desired} nodes</span>` : '<span class="dim">no data</span>',
+  const x86 = (M && M.nodes || []).filter(n => n.arch === 'amd64').map(n => n.name);
+  card(live, 'Runtime detection', `Falco on ${x86.length ? esc(x86.join(', ')) : 'the x86 node'} watches syscalls for container escapes and shells. The Pi nodes rely on pisentry.`,
+    falco ? `<span class="${falco.healthy ? 'ok' : 'bad'}">${falco.available}/${falco.desired} x86 node${falco.desired === 1 ? '' : 's'}</span>` : '<span class="dim">no data</span>',
     falco ? (falco.healthy ? 'ok' : 'bad') : null);
 
   // Host security agent. Coverage only: this page is public, so no categories,
@@ -610,10 +677,48 @@ function renderSecurity() {
   $('security').innerHTML = design.join('');
 }
 
+function renderPipeline() {
+  const st = (id, html) => { const el = document.querySelector(`[data-st="${id}"]`); if (el) el.innerHTML = html; };
+  const dot = s => `<span class="dot ${s}"></span>`;
+  const main = H && H.ci && H.ci.main;
+  const last = main && main.pushes[0];
+  st('git', last ? `${dot('ok')}<a href="${REPO_URL}/commit/${esc(last.sha)}" target="_blank" rel="noopener">${esc(last.sha)}</a> ${ago(Date.parse(last.date) / 1000)}` : '<span class="dim">no data</span>');
+  if (M) {
+    const flux = (M.workloads || []).filter(w => w.namespace === 'flux-system');
+    const fOk = flux.filter(w => w.healthy).length;
+    st('flux', flux.length ? `${dot(fOk === flux.length ? 'ok' : 'bad')}${fOk}/${flux.length} controllers` : '<span class="dim">no data</span>');
+    st('sops', `${dot('ok')}age key in cluster`);
+    const nodes = M.nodes || [], ready = nodes.filter(n => n.ready).length;
+    st('k3s', `${dot(ready === nodes.length ? 'ok' : 'bad')}${ready}/${nodes.length} nodes, ${M.pods_running} pods`);
+    const tun = (M.workloads || []).filter(w => w.name === 'cloudflared');
+    const tOk = tun.filter(w => w.healthy).length;
+    st('edge', tun.length ? `${dot(tOk === tun.length ? 'ok' : tOk ? 'warn' : 'bad')}${tOk}/${tun.length} tunnels` : '<span class="dim">no data</span>');
+  }
+
+  // Tracker: every push that landed on main (oldest left), and the PR checks that gate them.
+  const el = $('pushes');
+  if (!H || !H.ci) { el.innerHTML = '<div class="pu-last">waiting for GitHub data</div>'; return; }
+  const ci = H.ci, runs = (ci.recent || []).slice().reverse();
+  const pushes = main ? main.pushes.slice().reverse() : [];
+  const sq = (cls, tip) => `<i class="${cls}" title="${esc(tip)}"></i>`;
+  const pushSq = pushes.map((p, i) => sq('ok' + (i === pushes.length - 1 ? ' new' : ''),
+    `${p.sha} ${p.title} (${fmtHour(new Date(p.date))})`)).join('');
+  const runSq = runs.map(r => sq(r.conclusion === 'success' ? 'ok' : r.conclusion === 'failure' ? 'bad' : 'warn',
+    `run ${r.run_number} ${r.conclusion}: ${r.title}`)).join('');
+  const passed = runs.filter(r => r.conclusion === 'success').length;
+  el.innerHTML = `
+    <div class="pu-row"><small>main</small><div class="pu-sq">${pushSq || '<span class="pu-last">no pushes in 30 days</span>'}</div>
+      <div class="pu-n">${main ? `<b>${main.d7}</b> this week, <b>${main.d30}${main.truncated ? '+' : ''}</b> in 30d` : 'no data'}</div></div>
+    <div class="pu-row"><small>checks</small><div class="pu-sq">${runSq}</div>
+      <div class="pu-n">${runs.length ? `<b>${passed}/${runs.length}</b> passed` : 'no data'}</div></div>
+    ${last ? `<div class="pu-last">latest <a href="${REPO_URL}/commit/${esc(last.sha)}" target="_blank" rel="noopener">${esc(last.sha)}</a> ${esc(last.title)}${last.pr ? ` (#${esc(last.pr)})` : ''}, ${ago(Date.parse(last.date) / 1000)}</div>` : ''}`;
+}
+
 function renderAll() {
   const groups = buildGroups();
   renderStatus(groups);
   renderTiles(groups);
+  renderPipeline();
   renderNodes();
   renderServices(groups);
   renderPlatform();

@@ -10,8 +10,9 @@ data:
     #                                  host security coverage (pisentry).
     # Slow loop (5m):  history.json  - 7d hourly availability, 24h sparklines,
     #                                  restarts, volumes, Renovate, Longhorn, CI.
-    # Prometheus is the only data source, plus one unauthenticated read of the
-    # public GitHub Actions API for the Security Review workflow.
+    # Prometheus is the only data source, plus unauthenticated reads of the
+    # public GitHub API: Security Review workflow runs and the first-parent
+    # history of main (the pushes Flux applies). Three calls every 10 minutes.
     apk add --no-cache curl jq > /dev/null 2>&1
 
     PROM="${PROM:-http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1}"
@@ -56,6 +57,7 @@ data:
       q 'kube_daemonset_status_desired_number_scheduled'                                > $T/ds_desired.json
       q 'sum(up)'                                                                       > $T/up_sum.json
       q 'count(up)'                                                                     > $T/up_count.json
+      q 'count by(job)(up == 0)'                                                        > $T/up_down.json
       # pisentry host agents. Coverage only: every query aggregates away node,
       # category, check and severity labels before anything reaches the page.
       q 'count(pisentry_up)'                                                               > $T/ps_present.json
@@ -73,7 +75,7 @@ data:
         --slurpfile da $T/dep_avail.json --slurpfile dd $T/dep_desired.json \
         --slurpfile sr $T/sts_ready.json --slurpfile sd $T/sts_desired.json \
         --slurpfile dr $T/ds_ready.json --slurpfile dsd $T/ds_desired.json \
-        --slurpfile up_sum $T/up_sum.json --slurpfile up_count $T/up_count.json \
+        --slurpfile up_sum $T/up_sum.json --slurpfile up_count $T/up_count.json --slurpfile up_down $T/up_down.json \
         --slurpfile ps_present $T/ps_present.json --slurpfile ps_up $T/ps_up.json --slurpfile ps_det_age $T/ps_det_age.json \
         --slurpfile ps_events $T/ps_events.json --slurpfile ps_posture $T/ps_posture.json \
         > "$OUT_DIR/metrics.json.tmp" 2>$T/fast.err && mv "$OUT_DIR/metrics.json.tmp" "$OUT_DIR/metrics.json" \
@@ -81,21 +83,44 @@ data:
     }
 
     collect_ci() {
-      gh "repos/$GH_REPO/actions/workflows/$GH_WORKFLOW/runs?per_page=1&status=completed" > $T/ci_runs.json || return 1
+      gh "repos/$GH_REPO/actions/workflows/$GH_WORKFLOW/runs?per_page=20&status=completed" > $T/ci_runs.json || return 1
       id=$(jq -r '.workflow_runs[0].id // empty' $T/ci_runs.json 2>/dev/null)
       [ -n "$id" ] || return 1
       gh "repos/$GH_REPO/actions/runs/$id/jobs" > $T/ci_jobs.json || return 1
-      jq -n --slurpfile r $T/ci_runs.json --slurpfile j $T/ci_jobs.json --arg ts "$(now_iso)" '
-        ($r[0].workflow_runs[0]) as $run |
-        { fetched_at: $ts,
-          total_runs: $r[0].total_count,
-          run_number: $run.run_number,
-          conclusion: $run.conclusion,
-          event: $run.event,
-          head_branch: $run.head_branch,
-          updated_at: $run.updated_at,
-          html_url: $run.html_url,
-          jobs: [ $j[0].jobs[] | { name, conclusion, completed_at } ] }' \
+      ci_now=$(date -u +%s)
+      since=$(date -u -d "@$(( ci_now - 30 * 86400 ))" +%Y-%m-%dT%H:%M:%SZ)
+      gh "repos/$GH_REPO/commits?sha=main&per_page=100&since=$since" > $T/ci_commits.json || echo '[]' > $T/ci_commits.json
+      jq -n --slurpfile r $T/ci_runs.json --slurpfile j $T/ci_jobs.json --slurpfile c $T/ci_commits.json \
+            --arg ts "$(now_iso)" --argjson now "$ci_now" '
+        # Walk first parents from the tip of main: one entry per push or merge
+        # that landed on main, not the commits a merged branch carried in.
+        def fp($by; $sha): ($by[$sha] // null) as $x
+          | if $x == null then [] else [$x] + fp($by; ($x.parents[0].sha // "")) end;
+        def title: split("\n") as $l
+          | (if ($l[0] | startswith("Merge pull request")) then ([ $l[1:][] | select(length > 0) ][0] // $l[0]) else $l[0] end)
+          | .[0:100];
+        ($r[0].workflow_runs[0]) as $run
+        | ($c[0] | if type == "array" then . else [] end) as $cs
+        | ($cs | map({ key: .sha, value: . }) | from_entries) as $by
+        | (if ($cs | length) == 0 then [] else fp($by; $cs[0].sha) end
+           | map({ sha: .sha[0:7], date: .commit.committer.date,
+                   pr: ((.commit.message | split("\n")[0] | capture("^Merge pull request #(?<n>[0-9]+)") | .n | tonumber) // null),
+                   title: (.commit.message | title) })) as $pushes
+        | { fetched_at: $ts,
+            total_runs: $r[0].total_count,
+            run_number: $run.run_number,
+            conclusion: $run.conclusion,
+            event: $run.event,
+            head_branch: $run.head_branch,
+            updated_at: $run.updated_at,
+            html_url: $run.html_url,
+            jobs: [ $j[0].jobs[] | { name, conclusion, completed_at } ],
+            recent: [ $r[0].workflow_runs[] | { run_number, conclusion, updated_at, title: ((.display_title // "") | .[0:100]) } ],
+            main: { d7: ([ $pushes[] | select((.date | fromdateiso8601) > $now - 7 * 86400) ] | length),
+                    d30: ($pushes | length),
+                    # One page of 100 commits; a full page means the 30 day count is a floor.
+                    truncated: (($cs | length) >= 100),
+                    pushes: $pushes[0:30] } }' \
         > $T/ci.json.tmp 2>/dev/null && mv $T/ci.json.tmp $T/ci.json
     }
 
@@ -117,6 +142,7 @@ data:
       qr 'count(kube_pod_status_phase{phase="Running"} == 1)'                                                                        $D_START $now $D_STEP > $T/d_pods.json
       q  'node_uname_info'                                                                        > $T/h_nodes.json
       q  'sum(increase(kube_pod_container_status_restarts_total[24h]))'                           > $T/restarts.json
+      q  'sum(increase(kube_pod_container_status_restarts_total[1h]))'                            > $T/restarts_1h.json
       q  'topk(3, sum by(namespace,pod)(increase(kube_pod_container_status_restarts_total[24h])) > 0.5)' > $T/restarts_top.json
       q  'count(kube_persistentvolume_status_phase{phase="Bound"} == 1)'                          > $T/pv_bound.json
       q  'count(kube_persistentvolume_info)'                                                      > $T/pv_total.json
@@ -132,7 +158,7 @@ data:
         --slurpfile h_dep $T/h_dep.json --slurpfile h_sts $T/h_sts.json --slurpfile h_ds $T/h_ds.json --slurpfile h_node_up $T/h_node_up.json \
         --slurpfile d_node_cpu $T/d_node_cpu.json --slurpfile d_node_mem $T/d_node_mem.json \
         --slurpfile d_cpu $T/d_cpu.json --slurpfile d_mem $T/d_mem.json --slurpfile d_pods $T/d_pods.json \
-        --slurpfile nodes $T/h_nodes.json --slurpfile restarts $T/restarts.json --slurpfile restarts_top $T/restarts_top.json \
+        --slurpfile nodes $T/h_nodes.json --slurpfile restarts $T/restarts.json --slurpfile restarts_1h $T/restarts_1h.json --slurpfile restarts_top $T/restarts_top.json \
         --slurpfile pv_bound $T/pv_bound.json --slurpfile pv_total $T/pv_total.json --slurpfile renovate $T/renovate.json \
         --slurpfile lh_total $T/lh_total.json --slurpfile lh_healthy $T/lh_healthy.json \
         --slurpfile lh_degraded $T/lh_degraded.json --slurpfile lh_faulted $T/lh_faulted.json \
@@ -194,6 +220,8 @@ data:
       pods_total:   (res($pods_total)[0].value[1]   // "0" | tonumber),
       targets_up:   (res($up_sum)[0].value[1]       // "0" | tonumber),
       targets_total:(res($up_count)[0].value[1]     // "0" | tonumber),
+      # Which scrape jobs are down, so the page names them instead of a bare count.
+      targets_down: ([ res($up_down)[] | { job: (.metric.job // "unknown"), count: (val | round) } ] | sort_by(-.count, .job)),
       # Host security coverage. null means not deployed: no pisentry series and no
       # pisentry DaemonSet, so the page says so instead of showing 0/N.
       pisentry: (
@@ -245,6 +273,8 @@ data:
                 | from_entries )
       },
       restarts_24h: (scalar($restarts) // 0 | round),
+      # Last hour separates a crash loop that is still going from reboot fallout.
+      restarts_1h: (scalar($restarts_1h) // 0 | round),
       restarts_top: [ res($restarts_top)[] | { namespace: .metric.namespace, pod: .metric.pod, count: (val | round) } ],
       pv: { bound: (scalar($pv_bound) // 0), total: (scalar($pv_total) // 0) },
       renovate_last_success: scalar($renovate),
