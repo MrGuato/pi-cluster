@@ -51,7 +51,7 @@ spec:
 
       containers:
         - name: falco
-          image: docker.io/falcosecurity/falco:0.45.1
+          image: docker.io/falcosecurity/falco:0.45.2
           imagePullPolicy: IfNotPresent
 
           # ── Entrypoint ──────────────────────────────────────────
