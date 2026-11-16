@@ -1,0 +1,120 @@
+---
+# Alerts for pisentry, loaded by the Prometheus Operator in kube-prometheus-stack.
+# kube-prometheus-stack only picks up rules carrying its release label
+# (ruleSelectorNilUsesHelmValues defaults to true). Adjust "release" if your
+# HelmRelease is named differently.
+#
+# spec.groups is a copy of deploy/prometheus/pisentry-rules.yaml plus one
+# Kubernetes-only alert at the end; internal/metrics/rules_test.go fails when
+# they drift. Validate with:
+#   kubeconform -strict -schema-location default \
+#     -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+#     deploy/kubernetes/apps/base/pisentry/prometheusrule.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pisentry
+  namespace: pisentry
+  labels:
+    app.kubernetes.io/name: pisentry
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: pisentry.agent
+      rules:
+        # "Root wins": an attacker with root stops the agent first. The page
+        # has to come from the agent going quiet, not from the agent itself.
+        - alert: PisentryAgentDown
+          expr: up{job=~"(.+/)?pisentry"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: pisentry on {{ $labels.instance }} is not answering scrapes
+            description: Prometheus cannot scrape pisentry on {{ $labels.instance }} for 5 minutes.
+            runbook: Check `systemctl status pisentry` (or the pod) on that host; if it was stopped by hand and nobody knows why, treat the host as compromised.
+        - alert: PisentryAgentAbsent
+          expr: absent(pisentry_up)
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: No pisentry agent is reporting at all
+            description: The pisentry_up series is missing from every target for 10 minutes.
+            runbook: Check the scrape config and the PodMonitor or static target; then check whether every agent was stopped at once.
+        - alert: PisentryDetectorStale
+          expr: time() - pisentry_detector_last_run_timestamp_seconds{detector=~"proc|listeners|fim"} > 600
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: pisentry {{ $labels.detector }} detector on {{ $labels.instance }} has not run for {{ $value | humanizeDuration }}
+            description: The proc, listeners and fim detectors run every 15 to 60 seconds. A gap over 10 minutes means the loop is stuck or the process is starved.
+            runbook: Look for errors in `journalctl -u pisentry` and for a slow disk; restart pisentry if the loop is stuck.
+        - alert: PisentryDetectorStaleSlow
+          expr: time() - pisentry_detector_last_run_timestamp_seconds{detector=~"suid|audit"} > 13 * 3600
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: pisentry {{ $labels.detector }} detector on {{ $labels.instance }} has not run for {{ $value | humanizeDuration }}
+            description: The SUID walk and posture audit run every 6 hours. Two missed cycles means the schedule is broken.
+            runbook: Check `journalctl -u pisentry` for walk errors; `pisentry baseline reset` forces a fresh scan.
+        - alert: PisentryDetectorErrors
+          expr: increase(pisentry_detector_errors_total[15m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: pisentry {{ $labels.detector }} detector on {{ $labels.instance }} is failing
+            description: '{{ $value | humanize }} errors from the {{ $labels.detector }} detector in the last 15 minutes.'
+            runbook: Read the detector error in `journalctl -u pisentry`; most are missing permissions or a moved log file after a deploy.
+        - alert: PisentryAlertsDropped
+          expr: increase(pisentry_alerts_dropped_total[1h]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: pisentry on {{ $labels.instance }} dropped webhook alerts ({{ $labels.reason }})
+            description: '{{ $value | humanize }} alerts were not delivered in the last hour.'
+            runbook: For reason="rate_limit" look at what is flooding with `pisentry report -since 1h`; otherwise check the webhook URL with `pisentry test-alert`.
+        - alert: PisentryRuleReloadFailed
+          expr: increase(pisentry_rules_reload_failures_total[15m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: pisentry on {{ $labels.instance }} rejected a rules.d change
+            description: The previous rule set is still active, so the change you pushed is not in effect.
+            runbook: Run `pisentry check` on that host to see the file, rule and field, fix it, then `systemctl reload pisentry`.
+
+    - name: pisentry.events
+      rules:
+        - alert: PisentryCriticalEvent
+          expr: increase(pisentry_events_total{severity="critical", category!="PS00"}[5m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: 'pisentry {{ $labels.category }} {{ $labels.name }}: critical event on {{ $labels.instance }}'
+            description: '{{ $value | humanize }} critical {{ $labels.name }} events in the last 5 minutes.'
+            runbook: Run `pisentry report -since 1h` on the host and start with the top row; the event JSON in the journal has the process, source and file.
+        - alert: PisentryHighEvents
+          expr: increase(pisentry_events_total{severity="high", category!="PS00"}[15m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: 'pisentry {{ $labels.category }} {{ $labels.name }}: high severity events on {{ $labels.instance }}'
+            description: '{{ $value | humanize }} high severity {{ $labels.name }} events in the last 15 minutes.'
+            runbook: Run `pisentry report -since 1h` on the host; if the event is expected, add an exception in rules.d or allow it in config.json.
+
+    - name: pisentry.kubernetes
+      rules:
+        # Needs kube-state-metrics (part of kube-prometheus-stack). Catches a
+        # node where the DaemonSet pod is gone, unschedulable or crash-looping,
+        # which absent() cannot see while other nodes still report.
+        - alert: PisentryNodeWithoutAgent
+          expr: count by (node) (kube_node_info) unless on (node) count by (node) (pisentry_up == 1)
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: Node {{ $labels.node }} has no running pisentry agent
+            description: kube-state-metrics lists node {{ $labels.node }} but no pisentry pod on it has reported for 15 minutes.
+            runbook: Run `kubectl -n pisentry get pods -o wide --field-selector spec.nodeName={{ $labels.node }}` and check taints, image pull and AppArmor events.
