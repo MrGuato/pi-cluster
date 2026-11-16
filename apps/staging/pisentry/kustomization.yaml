@@ -11,6 +11,6 @@ resources:
 # Example: trust your LAN for the "first login from a new source" rule and
 # override the image here instead of in base.
 # images:
-#   - name: ghcr.io/mrguato/pisentry
-#     newTag: v0.1.0
-#     digest: sha256:c6d02415ff55504ab1a84a2375776090d123340b5fa90ee083b156d1bb608ec3
+#   - name: ghcr.io/pisentry/pisentry
+#     newTag: v0.2.2-rc.1
+#     digest: sha256:ee066a7b815fa33db357c5ad7abee25357857a55f073dccb81b6a30a27803a7d

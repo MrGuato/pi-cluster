@@ -10,4 +10,5 @@ resources:
   - daemonset.yaml
   - networkpolicy.yaml
   - podmonitor.yaml
+  - prometheusrule.yaml
   - grafana-dashboard.yaml
